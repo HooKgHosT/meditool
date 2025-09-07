@@ -882,98 +882,99 @@ do {
         $selection = Read-Host "Opcion"
         Write-Host ""
         
-        switch ($selection) {
-            "1" {
-                $rdpIn = Get-LastIncomingRDPLogon
-                $rdpOut = Get-LastOutgoingRDPConnection
-                Write-Host "Estado del servicio RDP: $(Get-RDPStatus)"
-                Write-Host "Última conexión RDP entrante:`n  - Fecha: $(if ($rdpIn) { $rdpIn.Fecha } else { 'N/A' })`n  - Usuario: $(if ($rdpIn) { $rdpIn.Usuario } else { 'N/A' })`n  - Origen: $(if ($rdpIn) { $rdpIn.Origen } else { 'N/A' })"
-                Write-Host "Última conexión RDP saliente:`n  - Host/IP: $(if ($rdpOut) { $rdpOut.Host } else { 'N/A' })`n  - Fecha: $(if ($rdpOut) { $rdpOut.Fecha } else { 'N/A' })"
+    switch ($selection) {
+        "1" {
+            $rdpIn = Get-LastIncomingRDPLogon
+            $rdpOut = Get-LastOutgoingRDPConnection
+            Write-Host "Estado del servicio RDP: $(Get-RDPStatus)"
+            Write-Host "Última conexión RDP entrante:`n  - Fecha: $(if ($rdpIn) { $rdpIn.Fecha } else { 'N/A' })`n  - Usuario: $(if ($rdpIn) { $rdpIn.Usuario } else { 'N/A' })`n  - Origen: $(if ($rdpIn) { $rdpIn.Origen } else { 'N/A' })"
+            Write-Host "Última conexión RDP saliente:`n  - Host/IP: $(if ($rdpOut) { $rdpOut.Host } else { 'N/A' })`n  - Fecha: $(if ($rdpOut) { $rdpOut.Fecha } else { 'N/A' })"
+        }
+        "2" {
+            $rules = Get-FirewallStatus
+            if ($rules) { Write-Host "Reglas de Firewall que permiten conexiones entrantes:" -ForegroundColor Yellow; $rules | Format-Table -AutoSize } else { Write-Host "No se encontraron reglas de Firewall que permitan conexiones entrantes." -ForegroundColor Green }
+        }
+        "3" {
+            Fix-FirewallPorts
+        }
+        "4" {
+            Manage-RDP
+        }
+        "5" {
+            Manage-WindowsTelemetry
+        }
+        "6" {
+            $tasks = Find-MaliciousScheduledTasks
+            if ($tasks.Count -gt 0) { Write-Host "Se encontraron tareas programadas sospechosas:" -ForegroundColor Red; $tasks | Format-Table -AutoSize } else { Write-Host "No se encontraron tareas programadas sospechosas." -ForegroundColor Green }
+        }
+        "7" {
+            Write-Host "Analizando la política de contraseñas..." -ForegroundColor Yellow
+            $policy = Analyze-PasswordPolicy
+            if ($policy) {
+                $policy | Format-Table -AutoSize
+            } else {
+                Write-Host "No se pudo obtener la política de contraseñas. Asegúrese de tener permisos." -ForegroundColor Red
             }
-            "2" {
-                $rules = Get-FirewallStatus
-                if ($rules) { Write-Host "Reglas de Firewall que permiten conexiones entrantes:" -ForegroundColor Yellow; $rules | Format-Table -AutoSize } else { Write-Host "No se encontraron reglas de Firewall que permitan conexiones entrantes." -ForegroundColor Green }
-            }
-            "3" {
-                Fix-FirewallPorts
-            }
-            "4" {
-                Manage-RDP
-            }
-            "5" {
-                Manage-WindowsTelemetry
-            }
-            "6" {
-                $tasks = Find-MaliciousScheduledTasks
-                if ($tasks.Count -gt 0) { Write-Host "Se encontraron tareas programadas sospechosas:" -ForegroundColor Red; $tasks | Format-Table -AutoSize } else { Write-Host "No se encontraron tareas programadas sospechosas." -ForegroundColor Green }
-            }
-            "7" {
-                Write-Host "Analizando la política de contraseñas..." -ForegroundColor Yellow
-                $policy = Analyze-PasswordPolicy
-                if ($policy) {
-                    $policy | Format-Table -AutoSize
-                } else {
-                    Write-Host "No se pudo obtener la política de contraseñas. Asegúrese de tener permisos." -ForegroundColor Red
-                }
-            }
-            "8" {
-                $inactiveUsers = Find-InactiveUsers
-                if ($inactiveUsers.Count -gt 0) { Write-Host "Se encontraron las siguientes cuentas de usuario inactivas:" -ForegroundColor Red; $inactiveUsers | Format-Table -AutoSize } else { Write-Host "No se encontraron cuentas de usuario inactivas." -ForegroundColor Green }
-            }
-            "9" {
-                $unsignedFiles = Verify-FileSignatures
-                if ($unsignedFiles.Count -gt 0) { Write-Host "Se encontraron archivos sin firma digital o con firma inválida:" -ForegroundColor Red; $unsignedFiles | Format-Table -AutoSize } else { Write-Host "No se encontraron archivos sospechosos en las rutas críticas." -ForegroundColor Green }
-            }
-            "10" {
-                $unsignedProcesses = Find-UnsignedProcesses
-                if ($unsignedProcesses.Count -gt 0) { Write-Host "Se encontraron procesos en ejecución sin firma digital:" -ForegroundColor Red; $unsignedProcesses | Format-Table -AutoSize } else { Write-Host "No se encontraron procesos sin firma." -ForegroundColor Green }
-            }
-            "11" {
-                Stop-SuspiciousProcess
-            }
-            "12" {
-                Block-FileExecution
-            }
-            "13" {
-                $suspiciousEntries = Find-RegistryAutorun
-                if ($suspiciousEntries.Count -gt 0) { Write-Host "Se encontraron entradas de inicio automático sospechosas en el registro:" -ForegroundColor Red; $suspiciousEntries | Format-Table -AutoSize } else { Write-Host "No se encontraron entradas sospechosas en el registro." -ForegroundColor Green }
-            }
-            "14" {
-                Analyze-NetworkConnections
-            }
-            "15" {
-                Close-SuspiciousConnection
-            }
-            "16" {
-                Find-HiddenFilesAndScan
-            }
-            "17" {
-                Audit-FailedLogons
-            }
-            "18" {
-                Activate-Windows
-            }
-            "19" {
-                Generate-HTMLReport
-            }
-            "20" {
-                $info = Get-UserInfo
-                Write-Host "Información del Usuario y Sistema:" -ForegroundColor Yellow
-                Write-Host "  - Usuario actual: $($info.UsuarioActual)"
-                Write-Host "  - Nombre del equipo: $($info.NombreEquipo)"
-                Write-Host "  - Administradores locales: $([string]::join(', ', $info.AdministradoresLocales))"
-            }
-            "21" {
-                MacChangerMenu
-            }
-            "22" {
-        Update-AllWingetApps
-    }
-    "0" {
-        break
-    }
-    default {
-        Write-Host "Opción no válida. Por favor, intente de nuevo." -ForegroundColor Red
+        }
+        "8" {
+            $inactiveUsers = Find-InactiveUsers
+            if ($inactiveUsers.Count -gt 0) { Write-Host "Se encontraron las siguientes cuentas de usuario inactivas:" -ForegroundColor Red; $inactiveUsers | Format-Table -AutoSize } else { Write-Host "No se encontraron cuentas de usuario inactivas." -ForegroundColor Green }
+        }
+        "9" {
+            $unsignedFiles = Verify-FileSignatures
+            if ($unsignedFiles.Count -gt 0) { Write-Host "Se encontraron archivos sin firma digital o con firma inválida:" -ForegroundColor Red; $unsignedFiles | Format-Table -AutoSize } else { Write-Host "No se encontraron archivos sospechosos en las rutas críticas." -ForegroundColor Green }
+        }
+        "10" {
+            $unsignedProcesses = Find-UnsignedProcesses
+            if ($unsignedProcesses.Count -gt 0) { Write-Host "Se encontraron procesos en ejecución sin firma digital:" -ForegroundColor Red; $unsignedProcesses | Format-Table -AutoSize } else { Write-Host "No se encontraron procesos sin firma." -ForegroundColor Green }
+        }
+        "11" {
+            Stop-SuspiciousProcess
+        }
+        "12" {
+            Block-FileExecution
+        }
+        "13" {
+            $suspiciousEntries = Find-RegistryAutorun
+            if ($suspiciousEntries.Count -gt 0) { Write-Host "Se encontraron entradas de inicio automático sospechosas en el registro:" -ForegroundColor Red; $suspiciousEntries | Format-Table -AutoSize } else { Write-Host "No se encontraron entradas sospechosas en el registro." -ForegroundColor Green }
+        }
+        "14" {
+            Analyze-NetworkConnections
+        }
+        "15" {
+            Close-SuspiciousConnection
+        }
+        "16" {
+            Find-HiddenFilesAndScan
+        }
+        "17" {
+            Audit-FailedLogons
+        }
+        "18" {
+            Activate-Windows
+        }
+        "19" {
+            Generate-HTMLReport
+        }
+        "20" {
+            $info = Get-UserInfo
+            Write-Host "Información del Usuario y Sistema:" -ForegroundColor Yellow
+            Write-Host "  - Usuario actual: $($info.UsuarioActual)"
+            Write-Host "  - Nombre del equipo: $($info.NombreEquipo)"
+            Write-Host "  - Administradores locales: $([string]::join(', ', $info.AdministradoresLocales))"
+        }
+        "21" {
+            MacChangerMenu
+        }
+        "22" {
+            Update-AllWingetApps
+        }
+        "0" {
+            break
+        }
+        default {
+            Write-Host "Opción no válida. Por favor, intente de nuevo." -ForegroundColor Red
+        }
     }
         Write-Host ""
         Write-Host "Presione Enter para continuar..."
@@ -990,4 +991,5 @@ finally {
     Start-Sleep -Seconds 2
 
 }
+
 
