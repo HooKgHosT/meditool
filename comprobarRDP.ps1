@@ -810,7 +810,22 @@ function MacChangerMenu {
             Read-Host | Out-Null
         }
     } while ($true)
-}# --- MENÚ PRINCIPAL ---
+}
+
+function Update-AllWingetApps {
+    Write-Host "Iniciando la actualización de todas las aplicaciones con winget..." -ForegroundColor Green
+    Write-Host "Esto puede tardar varios minutos y requerir confirmación en algunas instalaciones." -ForegroundColor Yellow
+    
+    try {
+        winget upgrade --all --include-unknown --force
+        Write-Host "`nTodas las aplicaciones se han actualizado con éxito." -ForegroundColor Green
+    } catch {
+        Write-Host "`nOcurrió un error al ejecutar winget. Asegúrate de que winget esté instalado y de tener permisos de Administrador." -ForegroundColor Red
+        Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
+
+# --- MENÚ PRINCIPAL ---
 do {
     Clear-Host
     Set-WindowFocus
@@ -975,3 +990,4 @@ finally {
     Start-Sleep -Seconds 2
 
 }
+
