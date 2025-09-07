@@ -951,13 +951,15 @@ do {
             "21" {
                 MacChangerMenu
             }
-            "0" {
-                break
-            }
-            default {
-                Write-Host "Opción no válida. Por favor, intente de nuevo." -ForegroundColor Red
-            }
-        }
+            "22" {
+        Update-AllWingetApps
+    }
+    "0" {
+        break
+    }
+    default {
+        Write-Host "Opción no válida. Por favor, intente de nuevo." -ForegroundColor Red
+    }
         Write-Host ""
         Write-Host "Presione Enter para continuar..."
         Read-Host | Out-Null
@@ -971,4 +973,5 @@ finally {
     }
     Write-Host "`nEl script ha finalizado." -ForegroundColor Yellow
     Start-Sleep -Seconds 2
+
 }
