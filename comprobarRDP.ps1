@@ -1,6 +1,17 @@
 # Este script esta disenado como una herramienta de seguridad (Blue Team)
 # para la verificacion y correccion de vulnerabilidades comunes en sistemas Windows 10 y 11.
 
+function Test-AdminPrivileges {
+    $current = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+    return $current.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+if (-not (Test-AdminPrivileges)) {
+    Write-Host "No se esta ejecutando como Administrador. Relanzando con permisos elevados..." -ForegroundColor Yellow
+    # Relanza el script en una nueva ventana de PowerShell con permisos de Administrador.
+    Start-Process powershell -ArgumentList "-NoExit -ExecutionPolicy Bypass -File `"$MyInvocation.MyCommand.Path`"" -Verb RunAs
+    exit
+}
 
 # --- AUTODESCARGA Y RELANZAMIENTO ---
 #function Test-AdminPrivileges {
@@ -1349,5 +1360,6 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
