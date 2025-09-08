@@ -135,26 +135,31 @@ function Get-FirewallStatus {
     # Lista de nombres de programas comunes a excluir.
     $excludedPrograms = @(
         "*chrome.exe*", "*firefox.exe*", "*msedge.exe*",
-        "*steam.exe*", "*steamwebhelper.exe*", "*Discord.exe*", 
-        "*EpicGamesLauncher.exe*", "*UnrealEngine.exe*", "*zoom.exe*",
-        "*RiotClientServices.exe*", "*RiotClient.exe*", "*RiotVanguard.exe*", "*LeagueClient.exe*", "*LeagueClientUx.exe*", "*VALORANT.exe*"
+        "*steam.exe*", "*steamwebhelper.exe*", "*discord.exe*",
+        "*epicgameslauncher.exe*", "*unrealengine.exe*", "*zoom.exe*",
+        "*riotclientservices.exe*", "*riotclient.exe*", "*riotvanguard.exe*", "*leagueclient.exe*", "*leagueclientux.exe*", "*valorant.exe*",
+        "*spotify.exe*", "*visualstudiocode*", "*teamviewer*", "*anydesk*"
     )
 
     try {
         $allRules = Get-NetFirewallRule | Where-Object { 
-            $_.Enabled -eq "True" -and ($_.Direction -eq "Inbound" -or $_.Direction -eq "Both") -and ($_.Action -eq "Allow" -or $_.Action -eq "AllowInbound") 
+            $_.Enabled -eq "True" -and ($_.Direction -eq "Inbound" -or $_.Direction -eq "Both") -and ($_.Action -eq "Allow") 
         }
 
+        # Filtrar reglas para encontrar las que no son de Windows o programas comunes.
         $filteredRules = $allRules | Where-Object {
-            $programName = $_.ProgramName.ToLower()
+            $programPath = $_.ProgramName.ToLower()
+            $isSystemProgram = $programPath.StartsWith("%programfiles%") -or $programPath.StartsWith("%programfiles(x86)%") -or $programPath.StartsWith("%windir%")
             $isExcluded = $false
             foreach ($excluded in $excludedPrograms) {
-                if ($programName -like $excluded) {
+                if ($programPath -like $excluded) {
                     $isExcluded = $true
                     break
                 }
             }
-            -not $isExcluded
+            
+            # Devolver solo las reglas que no son del sistema y que no estan en la lista de excluidos.
+            -not $isSystemProgram -and -not $isExcluded
         }
         
         return $filteredRules | Select-Object DisplayName, Direction, Action, Profile, Protocol, LocalPort
@@ -1391,6 +1396,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
