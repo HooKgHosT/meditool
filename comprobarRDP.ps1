@@ -753,12 +753,55 @@ function Find-RegistryAutorun {
 }
 
 function Analyze-NetworkConnections {
+    Write-Host "`nAnalizando la configuracion de red..." -ForegroundColor Yellow
+    
+    try {
+        $adapters = Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' }
+        if ($adapters.Count -gt 0) {
+            foreach ($adapter in $adapters) {
+                Write-Host "`n--- Adaptador: $($adapter.Name) ---" -ForegroundColor Cyan
+                $ipAddress = Get-NetIPAddress -InterfaceIndex $adapter.InterfaceIndex -ErrorAction SilentlyContinue | Where-Object { $_.AddressFamily -eq 'IPv4' }
+                $gateway = Get-NetRoute -InterfaceIndex $adapter.InterfaceIndex -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue
+                $dns = Get-DnsClientServerAddress -InterfaceIndex $adapter.InterfaceIndex -ErrorAction SilentlyContinue
+                
+                if ($ipAddress) {
+                    Write-Host "  - Direccion IP: $($ipAddress.IPAddress)" -ForegroundColor White
+                    Write-Host "  - Subred: $($ipAddress.PrefixLength) bits" -ForegroundColor White
+                } else {
+                    Write-Host "  - Direccion IP: No disponible" -ForegroundColor Red
+                }
+                
+                Write-Host "  - Tipo de Adaptador: $($adapter.InterfaceDescription)" -ForegroundColor White
+
+                if ($gateway) {
+                    $macAddr = (Get-Neighbor -IPAddress $gateway.NextHop -ErrorAction SilentlyContinue).LinkLayerAddress
+                    Write-Host "  - MAC de Puerta de Enlace: $(if ($macAddr) { $macAddr } else { 'No disponible' })" -ForegroundColor White
+                } else {
+                    Write-Host "  - MAC de Puerta de Enlace: No disponible" -ForegroundColor Red
+                }
+
+                if ($dns) {
+                    $dnsServers = $dns.ServerAddresses -join ", "
+                    Write-Host "  - Servidores DNS: $($dnsServers)" -ForegroundColor White
+                } else {
+                    Write-Host "  - Servidores DNS: No disponible" -ForegroundColor Red
+                }
+            }
+        } else {
+            Write-Host "No se encontraron adaptadores de red activos." -ForegroundColor Red
+        }
+    } catch {
+        Write-Host "Error al obtener informacion de la red. Asegurese de tener permisos de Administrador." -ForegroundColor Red
+        Write-Host "Detalles del error: $($_.Exception.Message)" -ForegroundColor Red
+    }
+
     Write-Host "`nAnalizando conexiones de red en busca de actividad sospechosa..." -ForegroundColor Yellow
     
     $excludedProcesses = @(
         "chrome.exe", "steam.exe", "steamwebhelper.exe",
         "RiotClientServices.exe", "RiotClient.exe", "RiotVanguard.exe", "LeagueClient.exe", "LeagueClientUx.exe", "VALORANT.exe",
-        "EpicGamesLauncher.exe", "UnrealEngine.exe", "Discord.exe"
+        "EpicGamesLauncher.exe", "UnrealEngine.exe", "zoom.exe",
+        "Discord.exe"
     )
     
     $allProcesses = Get-Process -ErrorAction SilentlyContinue
@@ -794,7 +837,7 @@ function Analyze-NetworkConnections {
             $closeChoice = Read-Host
             
             if ($closeChoice -eq "S" -or $closeChoice -eq "s") {
-                Write-Host "`nPara cerrar una conexión, ingresa el PID de la lista anterior." -ForegroundColor Cyan
+                Write-Host "`nPara cerrar una conexion, ingresa el PID de la lista anterior." -ForegroundColor Cyan
                 Write-Host "Ingresa 0 para cancelar." -ForegroundColor Cyan
                 
                 $pidToClose = Read-Host "PID del proceso a cerrar"
@@ -803,8 +846,8 @@ function Analyze-NetworkConnections {
                     try {
                         $processToStop = Get-Process -Id $pidToClose -ErrorAction Stop
                         
-                        Write-Host "Se detendrá el proceso: $($processToStop.ProcessName) con PID $($pidToClose.Id)." -ForegroundColor Yellow
-                        Write-Host "¿Estás seguro? (S/N)" -ForegroundColor Red
+                        Write-Host "Se detendra el proceso: $($processToStop.ProcessName) con PID $($pidToClose.Id)." -ForegroundColor Yellow
+                        Write-Host "¿Estas seguro? (S/N)" -ForegroundColor Red
                         
                         $confirm = Read-Host
                         if ($confirm -eq "S" -or $confirm -eq "s") {
@@ -814,18 +857,18 @@ function Analyze-NetworkConnections {
                             
                             $postCloseMenu = $true
                             do {
-                                Write-Host "`nProceso cerrado. ¿Qué deseas hacer ahora?" -ForegroundColor Cyan
+                                Write-Host "`nProceso cerrado. ¿Que deseas hacer ahora?" -ForegroundColor Cyan
                                 Write-Host "1. Analizar el archivo ejecutable."
                                 Write-Host "2. Bloquear el archivo para que no vuelva a iniciar."
-                                Write-Host "3. Realizar un nuevo análisis de red."
-                                Write-Host "0. Volver al menú principal."
-                                $postCloseChoice = Read-Host "Opción"
+                                Write-Host "3. Realizar un nuevo analisis de red."
+                                Write-Host "0. Volver al menu principal."
+                                $postCloseChoice = Read-Host "Opcion"
                                 
                                 switch ($postCloseChoice) {
                                     "1" {
                                         if ($filePath) {
                                             Write-Host "Ruta del archivo analizado: $filePath" -ForegroundColor Green
-                                            Write-Host "Puedes buscar este archivo en el sistema de archivos para una inspección manual." -ForegroundColor White
+                                            Write-Host "Puedes buscar este archivo en el sistema de archivos para una inspeccion manual." -ForegroundColor White
                                         } else {
                                             Write-Host "No se pudo obtener la ruta del archivo ejecutable." -ForegroundColor Red
                                         }
@@ -846,20 +889,20 @@ function Analyze-NetworkConnections {
                                         $actionMenu = $false
                                     }
                                     default {
-                                        Write-Host "Opción no válida. Intente de nuevo." -ForegroundColor Red
+                                        Write-Host "Opcion no valida. Intente de nuevo." -ForegroundColor Red
                                     }
                                 }
                             } while ($postCloseMenu)
                             
                         } else {
-                            Write-Host "Operación cancelada." -ForegroundColor Red
+                            Write-Host "Operacion cancelada." -ForegroundColor Red
                         }
                         
                     } catch {
-                        Write-Host "No se pudo encontrar un proceso con ese PID. Asegúrese de que el número sea correcto y de tener permisos de Administrador." -ForegroundColor Red
+                        Write-Host "No se pudo encontrar un proceso con ese PID. Asegurese de que el numero sea correcto y de tener permisos de Administrador." -ForegroundColor Red
                     }
                 } else {
-                    Write-Host "Operación de cierre cancelada." -ForegroundColor Red
+                    Write-Host "Operacion de cierre cancelada." -ForegroundColor Red
                 }
             } else {
                 $actionMenu = $false
@@ -867,7 +910,7 @@ function Analyze-NetworkConnections {
         } while ($actionMenu)
         
     } else {
-        Write-Host "No se encontró actividad de red sospechosa." -ForegroundColor Green
+        Write-Host "No se encontro actividad de red sospechosa." -ForegroundColor Green
     }
 }
 
@@ -1102,7 +1145,9 @@ function Get-UserInfo {
     $adminMembers = @()
     try {
         $adminMembers = (Get-LocalGroupMember -Group "Administrators" -ErrorAction SilentlyContinue).Name
-    } catch {}
+    } catch {
+        $adminMembers = @() # Asegurar que es un array vacio en caso de error
+    }
     
     # Obtener informacion de la red y los adaptadores
     $networkAdapters = @()
@@ -1119,6 +1164,7 @@ function Get-UserInfo {
         }
     } catch {
         Write-Host "Error al obtener informacion de los adaptadores de red." -ForegroundColor Red
+        $networkAdapters = @() # Asegurar que es un array vacio en caso de error
     }
 
     $info = [PSCustomObject]@{
@@ -1476,6 +1522,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
