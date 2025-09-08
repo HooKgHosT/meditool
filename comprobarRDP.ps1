@@ -351,82 +351,49 @@ function Analyze-PasswordPolicy {
     Write-Host "`nAnalizando la politica de contrasenas..." -ForegroundColor Yellow
     
     try {
+        # Intenta obtener la politica de contrasenas del dominio de Active Directory
         $policy = Get-ADDefaultDomainPasswordPolicy -ErrorAction Stop
-
-        if ($policy) {
-            $results = [PSCustomObject]@{
-                "Longitud Minima" = $policy.MinPasswordLength
-                "Complejidad" = if ($policy.PasswordComplexity -eq "true") { "Habilitada" } else { "Deshabilitada" }
-                "Historial" = $policy.PasswordHistoryCount
-                "Antiguedad Maxima (dias)" = ($policy.MaxPasswordAge).Days
-            }
-            Write-Host ""
-            $results | Format-Table -AutoSize
-        } else {
-            Write-Host "No se pudo obtener la politica de contrasenas. Verifique la conexion a un dominio y los permisos." -ForegroundColor Red
+        
+        Write-Host "Politica de contrasenas de Active Directory encontrada." -ForegroundColor Green
+        
+        $results = [PSCustomObject]@{
+            "Longitud Minima" = $policy.MinPasswordLength
+            "Complejidad" = if ($policy.PasswordComplexity -eq "true") { "Habilitada" } else { "Deshabilitada" }
+            "Historial" = $policy.PasswordHistoryCount
+            "Antiguedad Maxima (dias)" = ($policy.MaxPasswordAge).Days
         }
+        Write-Host ""
+        $results | Format-Table -AutoSize
 
     } catch {
         Write-Host "No se pudo obtener la politica de contrasenas del dominio. Usando el metodo local 'net accounts'." -ForegroundColor Yellow
         $output = net accounts 2>$null
 
-        $results = @()
-        $policy = @{
-            "Longitud Minima" = "N/A"
-            "Complejidad" = "N/A"
-            "Historial" = "N/A"
-            "Antiguedad Maxima (dias)" = "N/A"
-        }
-
-        foreach ($line in $output) {
-            if ($line -like "*Longitud minima de la password*") {
-                $policy."Longitud Minima" = ($line.Split(':')[1]).Trim()
-            }
-            if ($line -like "*La complejidad de la password*") {
-                $policy."Complejidad" = ($line.Split(':')[1]).Trim()
-            }
-            if ($line -like "*Se guardan passwords en el historial*") {
-                $policy."Historial" = ($line.Split(':')[1]).Trim()
-            }
-            if ($line -like "*Antiguedad maxima de la password*") {
-                $policy."Antiguedad Maxima (dias)" = ($line.Split(':')[1]).Trim()
-            }
-        }
-
-        $policy.Keys | ForEach-Object {
-            $results += [PSCustomObject]@{
-                "Parametro de Seguridad" = $_
-                "Valor" = $policy[$_]
-            }
-        }
+        $resultsTable = @()
+        $foundData = $false
         
-        $results | Format-Table -AutoSize
-    }
-}
+        # Analiza la salida de 'net accounts'
+        $lines = $output | Select-String -Pattern "Longitud minima|Complejidad|Historial|Antiguedad" -CaseSensitive
 
-    foreach ($line in $output) {
-        if ($line -like "*Longitud minima de la password*") {
-            $policy."Longitud Minima" = ($line.Split(':')[1]).Trim()
+        if ($lines) {
+            $foundData = $true
+            $minLen = ($lines | Where-Object { $_.Line -like "*Longitud minima*" }).Line.Split(':')[1].Trim()
+            $complexity = ($lines | Where-Object { $_.Line -like "*La complejidad*" }).Line.Split(':')[1].Trim()
+            $history = ($lines | Where-Object { $_.Line -like "*historial*" }).Line.Split(':')[1].Trim()
+            $maxAge = ($lines | Where-Object { $_.Line -like "*Antiguedad maxima*" }).Line.Split(':')[1].Trim()
+            
+            $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Longitud Minima"; "Valor" = $minLen }
+            $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Complejidad"; "Valor" = $complexity }
+            $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Historial"; "Valor" = $history }
+            $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Antiguedad Maxima (dias)"; "Valor" = $maxAge }
         }
-        if ($line -like "*La complejidad de la password*") {
-            $policy."Complejidad" = ($line.Split(':')[1]).Trim()
-        }
-        if ($line -like "*Se guardan passwords en el historial*") {
-            $policy."Historial" = ($line.Split(':')[1]).Trim()
-        }
-        if ($line -like "*Antiguedad maxima de la password*") {
-            $policy."Antiguedad Maxima (dias)" = ($line.Split(':')[1]).Trim()
-        }
-    }
 
-    $policy.Keys | ForEach-Object {
-        $results += [PSCustomObject]@{
-            "Parametro de Seguridad" = $_
-            "Valor" = $policy[$_]
+        if ($foundData) {
+            $resultsTable | Format-Table -AutoSize
+        } else {
+            Write-Host "La informacion de politica de contrasenas no esta disponible para este equipo." -ForegroundColor Red
         }
     }
-    
-    return $results
 }
 
 function Find-InactiveUsers {
@@ -1510,6 +1477,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
