@@ -692,6 +692,7 @@ function Generate-HTMLReport {
     Write-Host "Reporte generado con éxito en: $reportPath" -ForegroundColor Green
     Invoke-Item $reportPath
 }
+
 function Get-UserInfo {
     $info = @{
         "UsuarioActual" = $env:USERNAME
@@ -713,103 +714,99 @@ function Test-AdminPrivileges {
     return $current.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# --- Funciones de MAC Changer ---
-
-function Get-RandomMacAddress {
-    $mac = (Get-Random -Maximum 256), (Get-Random -Maximum 256), (Get-Random -Maximum 256), (Get-Random -Maximum 256), (Get-Random -Maximum 256), (Get-Random -Maximum 256)
-    $mac[0] = ($mac[0] -bor 2) -band 254
-    return ($mac | ForEach-Object { "{0:X2}" -f $_ }) -join "-"
+function Get-RandomMacAddr {
+    # Genera una dirección MAC aleatoria que es administrada localmente y unicast
+    # Formato: 02:xx:xx:xx:xx:xx
+    # El primer octeto (02) cumple con las especificaciones de unicast (bit 0 del primer octeto es 0)
+    # y localmente administrado (bit 1 del primer octeto es 1).
+    # Genera 5 bytes aleatorios y los formatea como hex
+    $bytes = New-Object byte[] 5
+    (New-Object System.Security.Cryptography.RNGCryptoServiceProvider).GetBytes($bytes)
+    $hexBytes = ($bytes | ForEach-Object { "{0:X2}" -f $_ }) -join ":"
+    return "02:$hexBytes"
 }
 
-function Select-NetworkAdapter {
-    Write-Host "Seleccionando adaptadores de red en uso..." -ForegroundColor Yellow
-    $adapters = Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' }
-    if (-not $adapters) {
-        Write-Host "No se encontraron adaptadores de red físicos activos." -ForegroundColor Red
-        return $null
+function MacChangerMenu {
+    Write-Host "--- Menú de Mac Changer ---" -ForegroundColor Cyan
+    $adapters = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }
+    if ($adapters.Count -eq 0) {
+        Write-Host "No se encontraron adaptadores de red activos." -ForegroundColor Red
+        return
     }
-    Write-Host "`nLista de adaptadores de red activos:" -ForegroundColor Cyan
-    $adapters | Select-Object Name, InterfaceDescription, MacAddress | Format-Table -AutoSize
-    do {
-        $selection = Read-Host "`nIngrese el nombre del adaptador (ej: 'Ethernet' o 'Wi-Fi') o '0' para cancelar"
-        if ($selection -eq '0') { return $null }
-        $selectedAdapter = $adapters | Where-Object { $_.Name -eq $selection -or $_.InterfaceDescription -eq $selection }
-        if (-not $selectedAdapter) {
-            Write-Host "Selección no válida. Por favor, intente de nuevo." -ForegroundColor Red
+    Write-Host "Adaptadores de red disponibles:"
+    for ($i = 0; $i -lt $adapters.Count; $i++) {
+        Write-Host "$($i + 1). $($adapters[$i].Name)"
+    }
+    Write-Host "0. Volver al menú principal"
+    $selection = Read-Host "Seleccione un adaptador"
+    
+    if ($selection -eq "0") {
+        return
+    }
+    
+    $adapterIndex = [int]$selection - 1
+    if ($adapterIndex -ge 0 -and $adapterIndex -lt $adapters.Count) {
+        $global:AdapterName = $adapters[$adapterIndex].Name
+        
+        Write-Host "`nOpciones para '$($global:AdapterName)':"
+        Write-Host "1. Cambiar MAC por una aleatoria"
+        Write-Host "2. Restaurar MAC original"
+        Write-Host "0. Volver al menú anterior"
+        
+        $macOption = Read-Host "Seleccione una opción"
+        
+        switch ($macOption) {
+            "1" {
+                $newMac = Get-RandomMacAddr
+                Set-MacAddress -AdapterName $global:AdapterName -NewMacAddress $newMac
+            }
+            "2" {
+                Set-MacAddress -AdapterName $global:AdapterName -NewMacAddress $null
+            }
+            "0" {
+                MacChangerMenu
+            }
+            default {
+                Write-Host "Opción no válida." -ForegroundColor Red
+            }
         }
-    } while (-not $selectedAdapter)
-    return $selectedAdapter
+    } else {
+        Write-Host "Selección no válida." -ForegroundColor Red
+    }
 }
 
 function Set-MacAddress {
-    param ([Parameter(Mandatory=$true)][string]$AdapterName)
-    $adapter = Get-NetAdapter -Name $AdapterName
-    $global:AdapterName = $adapter.Name
-    $newMac = Get-RandomMacAddress
-    Write-Host "`nCambiando la dirección MAC de '$($adapter.InterfaceDescription)' a $newMac..." -ForegroundColor Yellow
+    param(
+        [string]$AdapterName,
+        [string]$NewMacAddress
+    )
+    
     try {
-        $adapterPath = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}\*" | Where-Object { $_.InterfaceDescription -eq $adapter.InterfaceDescription }
-        Set-ItemProperty -Path $adapterPath.PSPath -Name "NetworkAddress" -Value $newMac -Force
-        Disable-NetAdapter -Name $AdapterName -Confirm:$false -ErrorAction Stop
-        Start-Sleep -Seconds 2
-        Enable-NetAdapter -Name $AdapterName -Confirm:$false -ErrorAction Stop
-        Write-Host "`nDirección MAC cambiada exitosamente a $newMac. Puede tomar unos segundos para que la red se restablezca." -ForegroundColor Green
-    } catch {
-        Write-Host "Error al cambiar la dirección MAC. Asegúrese de que el adaptador esté activo y de tener permisos de Administrador." -ForegroundColor Red
-        Write-Host "Detalles del error: $($_.Exception.Message)" -ForegroundColor Red
-    }
-}
-
-function Restore-MacAddress {
-    param ([Parameter(Mandatory=$true)][string]$AdapterName)
-    $adapter = Get-NetAdapter -Name $AdapterName -ErrorAction SilentlyContinue
-    if (-not $adapter) {
-        Write-Host "El adaptador '$AdapterName' no se encuentra. No se puede restaurar la MAC." -ForegroundColor Red
-        return
-    }
-    Write-Host "`nRestaurando la dirección MAC de '$($adapter.InterfaceDescription)' a la original..." -ForegroundColor Yellow
-    try {
-        $adapterPath = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}\*" | Where-Object { $_.InterfaceDescription -eq $adapter.InterfaceDescription }
-        Remove-ItemProperty -Path $adapterPath.PSPath -Name "NetworkAddress" -ErrorAction Stop
-        Disable-NetAdapter -Name $AdapterName -Confirm:$false -ErrorAction Stop
-        Start-Sleep -Seconds 2
-        Enable-NetAdapter -Name $AdapterName -Confirm:$false -ErrorAction Stop
-        Write-Host "`nDirección MAC restaurada exitosamente. La red puede tardar unos segundos en restablecerse." -ForegroundColor Green
-    } catch {
-        Write-Host "Error al restaurar la dirección MAC. Es posible que el valor ya no exista o que el adaptador no esté disponible." -ForegroundColor Red
-        Write-Host "Detalles del error: $($_.Exception.Message)" -ForegroundColor Red
-    }
-}
-
-# --- Menú del MAC Changer ---
-
-function MacChangerMenu {
-    do {
-        Clear-Host
-        Write-Host "Gestor de Direcciones MAC" -ForegroundColor Yellow
-        Write-Host "1. Cambiar dirección MAC a una aleatoria." -ForegroundColor White
-        Write-Host "2. Restaurar dirección MAC a la original." -ForegroundColor White
-        Write-Host "0. Volver al menú principal." -ForegroundColor White
+        $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}"
+        $adapter = Get-ItemProperty -Path $regPath -EA 0 | Where-Object { $_.PSPath -match $AdapterName }
         
-        $choice = Read-Host "`nSeleccione una opción"
+        if (-not $adapter) {
+            Write-Host "No se encontró el adaptador de red en el registro." -ForegroundColor Red
+            return
+        }
         
-        switch ($choice) {
-            "1" {
-                $adapter = Select-NetworkAdapter
-                if ($adapter) { Set-MacAddress -AdapterName $adapter.Name }
-            }
-            "2" {
-                $adapter = Select-NetworkAdapter
-                if ($adapter) { Restore-MacAddress -AdapterName $adapter.Name }
-            }
-            "0" { break }
-            default { Write-Host "Opción no válida. Por favor, intente de nuevo." -ForegroundColor Red }
+        $adapterPath = $adapter.PSPath
+        
+        if ($NewMacAddress) {
+            Set-ItemProperty -Path $adapterPath -Name "NetworkAddress" -Value $NewMacAddress -Type String -Force
+            Write-Host "La dirección MAC de '$AdapterName' se cambió a $NewMacAddress" -ForegroundColor Green
+        } else {
+            Remove-ItemProperty -Path $adapterPath -Name "NetworkAddress" -ErrorAction SilentlyContinue
+            Write-Host "La dirección MAC de '$AdapterName' ha sido restaurada a su valor original." -ForegroundColor Green
         }
-        if ($choice -ne "0") {
-            Write-Host "`nPresione Enter para continuar..."
-            Read-Host | Out-Null
-        }
-    } while ($true)
+        
+        # Reiniciar el adaptador para aplicar los cambios
+        Restart-NetAdapter -Name $AdapterName -Confirm:$false
+        Write-Host "Adaptador reiniciado." -ForegroundColor Green
+    } catch {
+        Write-Host "Error al cambiar la dirección MAC. Asegúrese de tener permisos de Administrador." -ForegroundColor Red
+        Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+    }
 }
 
 function Update-AllWingetApps {
@@ -824,64 +821,49 @@ function Update-AllWingetApps {
         Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
     }
 }
-
 # --- MENÚ PRINCIPAL ---
-do {
+function Show-MainMenu {
     Clear-Host
-    Set-WindowFocus
-    
-    # Mostrar el dibujo ASCII y el texto inicial
-	Write-Host "
-	%         ______   ______  ______  ______   ______  ______  ______    ______  
-	%	 | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
-	% 	 |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
-	% 	 |______| |______||______||______| |______||______||______|  |______| 
-	% 	  ______  						      ______
-	% 	 | |__| |   _  _   ____  ___   __  _____  ____   ____  _     | |__| | 
-	% 	 |  ()  |  | \/ | |____||_  \ \__/|_ _ _| / _  \/ _  \| |    |  ()  | 
-	% 	 |______|  | || | | _|  | |  | ||   | |  | |.| | |.|  | |    |______| 
-	% 	  ______   | || | |__|_ |_|  | ||   | |  | |_| | |_|  | |_    ______
-	% 	 | |__| |  |_||_| |____||___/ /__\  |_|   \____/\____/|___|  | |__| | 
-	% 	 | () | | 						     |  ()  | 
-	% 	 |______| 						     |______| 
-	% 	  ______   ______  ______  ______   ______  ______  ______    ______  
-	% 	 | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
-	% 	 |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
-	% 	 |______| |______||______||______| |______||______||______|  |______|
-	" -ForegroundColor Cyan
-    Write-Host "BЛЦЕ Т3АМ Т00Л - V1.0" -ForegroundColor Green
-    Write-Host "aN@LiZ4NDO У c0rr1gi3Nd0 8Я3CH4S d3 $ЕgЦrІD4D..." -ForegroundColor Green
+    Write-Host "=============================================" -ForegroundColor Green
+    Write-Host "=                                           =" -ForegroundColor Green
+    Write-Host "=        Herramienta de Seguridad MediTool       =" -ForegroundColor Green
+    Write-Host "=                                           =" -ForegroundColor Green
+    Write-Host "=============================================" -ForegroundColor Green
+    Write-Host "Bienvenido a MediTool, tu solución de seguridad Blue Team."
+    Write-Host "Por favor, selecciona una opción del menú:"
     Write-Host ""
     
-
-        [PSCustomObject]@{ "ID" = 1; "Opcion" = "Analizar RDP y conexiones"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 2; "Opcion" = "Analizar Firewall"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 3; "Opcion" = "Corregir puertos de Firewall"; "Estado" = "Necesita permisos" },
-        [PSCustomObject]@{ "ID" = 4; "Opcion" = "Administrar RDP"; "Estado" = "Necesita permisos" },
-        [PSCustomObject]@{ "ID" = 5; "Opcion" = "Administrar Telemetria"; "Estado" = "Necesita permisos" },
-        [PSCustomObject]@{ "ID" = 6; "Opcion" = "Analizar Tareas Programadas"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 7; "Opcion" = "Analizar Politica de Contrasenas"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 8; "Opcion" = "Buscar usuarios inactivos"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 9; "Opcion" = "Verificar firmas de archivos"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 10; "Opcion" = "Analizar procesos sin firma"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 11; "Opcion" = "Detener proceso por PID"; "Estado" = "Necesita permisos" },
-        [PSCustomObject]@{ "ID" = 12; "Opcion" = "Bloquear ejecucion de archivo"; "Estado" = "Necesita permisos" },
-        [PSCustomObject]@{ "ID" = 13; "Opcion" = "Analizar persistencia (Autorun)"; "Estado" = "N/A" },
+    # Aquí es donde se define el menú
+    $menuOptions = @(
+        [PSCustomObject]@{ "ID" = 1; "Opcion" = "Revisar Estado de RDP y Últimas Conexiones"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 2; "Opcion" = "Auditar Reglas de Firewall Inseguras"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 3; "Opcion" = "Cerrar Puertos Inseguros (RDP/WinRM)"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 4; "Opcion" = "Administrar el servicio de RDP"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 5; "Opcion" = "Administrar la Telemetría de Windows"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 6; "Opcion" = "Buscar Tareas Programadas Maliciosas"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 7; "Opcion" = "Analizar Política de Contraseñas"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 8; "Opcion" = "Buscar Cuentas de Usuario Inactivas"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 9; "Opcion" = "Verificar Firmas de Archivos Críticos"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 10; "Opcion" = "Verificar Procesos en Ejecución sin Firma"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 11; "Opcion" = "Detener Procesos Sin Firma"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 12; "Opcion" = "Bloquear Ejecución de Archivo"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 13; "Opcion" = "Auditar Registro de Inicio Automático (Autorun)"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 14; "Opcion" = "Analizar Conexiones de Red"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 15; "Opcion" = "Cerrar Conexión Sospechosa"; "Estado" = "Necesita permisos" },
+        [PSCustomObject]@{ "ID" = 15; "Opcion" = "Cerrar Conexiones Sospechosas"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 16; "Opcion" = "Buscar Archivos Ocultos"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 17; "Opcion" = "Auditar Eventos de Seguridad"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 18; "Opcion" = "Activar Windows"; "Estado" = "Necesita permisos" },
-        [PSCustomObject]@{ "ID" = 19; "Opcion" = "Generar reporte de seguridad (HTML)"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 20; "Opcion" = "Mostrar informacion del usuario"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 17; "Opcion" = "Auditar Inicios de Sesión Fallidos"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 18; "Opcion" = "Activar Windows (Advertencia de Seguridad)"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 19; "Opcion" = "Generar Reporte de Seguridad (HTML)"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 20; "Opcion" = "Información del Usuario y Sistema"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 21; "Opcion" = "Gestor de Direcciones MAC"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 0; "Opcion" = "Salir"; "Estado" = "N/A" } | Format-Table -AutoSize
-        
-        Write-Host ""
-        Write-Host "Seleccione una opcion de la lista (ID):"
-        $selection = Read-Host "Opcion"
-        Write-Host ""
-        
+        [PSCustomObject]@{ "ID" = 22; "Opcion" = "Actualizar todas las aplicaciones (winget)"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 0; "Opcion" = "Salir"; "Estado" = "N/A" }
+    )
+    
+    $menuOptions | Format-Table -AutoSize
+    
+    $selection = Read-Host "Ingresa el número de la opción que deseas ejecutar"
+    
     switch ($selection) {
         "1" {
             $rdpIn = Get-LastIncomingRDPLogon
@@ -976,20 +958,14 @@ do {
             Write-Host "Opción no válida. Por favor, intente de nuevo." -ForegroundColor Red
         }
     }
-        Write-Host ""
-        Write-Host "Presione Enter para continuar..."
-        Read-Host | Out-Null
-        Clear-Host
-    } while ($selection -ne "0")
 
-finally {
-    if ($global:AdapterName) {
-        Write-Host "`nRestaurando la dirección MAC original antes de salir..." -ForegroundColor Green
-        Restore-MacAddress -AdapterName $global:AdapterName
-    }
-    Write-Host "`nEl script ha finalizado." -ForegroundColor Yellow
-    Start-Sleep -Seconds 2
+    Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+    Read-Host | Out-Null
+}
 
+# Iniciar el bucle del menú
+while ($true) {
+    Show-MainMenu
 }
 
 
