@@ -132,18 +132,42 @@ function Get-LastOutgoingRDPConnection {
 function Get-FirewallStatus {
     Write-Host "`nAnalizando reglas de firewall. Esto puede tardar unos segundos..." -ForegroundColor Yellow
 
+    # Lista de nombres de programas comunes a excluir.
+    $excludedPrograms = @(
+        "*chrome.exe*", "*firefox.exe*", "*msedge.exe*",
+        "*steam.exe*", "*steamwebhelper.exe*", "*discord.exe*",
+        "*epicgameslauncher.exe*", "*unrealengine.exe*", "*zoom.exe*",
+        "*riotclientservices.exe*", "*riotclient.exe*", "*riotvanguard.exe*", "*leagueclient.exe*", "*leagueclientux.exe*", "*valorant.exe*",
+        "*spotify.exe*", "*visualstudiocode*", "*teamviewer*", "*anydesk*"
+    )
+    
+    # Lista de puertos y servicios comunes de Windows a excluir.
+    $excludedPorts = @("3389", "135", "137", "139", "445")
+
     try {
-        # Obtenemos todas las reglas de firewall activas.
+        # Obtenemos todas las reglas de firewall activas que permiten conexiones de entrada.
         $allRules = Get-NetFirewallRule | Where-Object { 
             $_.Enabled -eq "True" -and ($_.Direction -eq "Inbound" -or $_.Direction -eq "Both") -and ($_.Action -eq "Allow") 
         }
 
-        $suspiciousRules = @()
-        foreach ($rule in $allRules) {
-            # Si la regla no esta vinculada a un programa especifico...
-            if (-not [string]::IsNullOrEmpty($rule.ProgramName)) {
-                 $suspiciousRules += $rule
+        # Filtramos las reglas para encontrar las que son potencialmente inseguras o inesperadas.
+        $suspiciousRules = $allRules | Where-Object {
+            $programPath = $_.ProgramName.ToLower()
+            $localPort = $_.LocalPort
+
+            # Lógica de exclusión
+            $isSystemProgram = $programPath.StartsWith("%programfiles%") -or $programPath.StartsWith("%programfiles(x86)%") -or $programPath.StartsWith("%windir%")
+            $isExcludedByProgramName = $false
+            foreach ($excluded in $excludedPrograms) {
+                if ($programPath -like $excluded) {
+                    $isExcludedByProgramName = $true
+                    break
+                }
             }
+            $isExcludedByPort = $excludedPorts -contains $localPort
+            
+            # Devolver reglas que no son de programas o puertos comunes.
+            -not $isSystemProgram -and -not $isExcludedByProgramName -and -not $isExcludedByPort
         }
         
         if ($suspiciousRules.Count -gt 0) {
@@ -152,11 +176,8 @@ function Get-FirewallStatus {
         } else {
             Write-Host "No se encontraron reglas de firewall que permitan conexiones entrantes." -ForegroundColor Green
         }
-
-        return $suspiciousRules
     } catch {
-        Write-Host "Error al obtener las reglas del Firewall. Asegurese de tener permisos de Administrador." -ForegroundColor Red
-        return $null
+        Write-Host "Error al obtener las reglas del Firewall. Verifique si el comando se ejecuto con privilegios de Administrador y reintente." -ForegroundColor Red
     }
 }
 
@@ -1393,6 +1414,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
