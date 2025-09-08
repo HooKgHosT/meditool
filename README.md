@@ -31,7 +31,8 @@ PowerShell
 Al ejecutarlo, el script se descargará temporalmente, se relanzará con permisos de administrador (si no los tiene) y te presentará un menú interactivo con todas las opciones disponibles.
 
 :camera: Capturas de Pantalla
-Aquí puedes agregar capturas de pantalla de la terminal mostrando el menú y los resultados del script para que los usuarios puedan ver cómo funciona.
+<img width="857" height="701" alt="screen1" src="https://github.com/user-attachments/assets/fc450926-ef24-4549-92e0-186a325413d7" />
+
 
 :page_with_curl: Licencia
 Este proyecto está bajo la licencia MIT. Puedes ver el archivo LICENSE para más detalles.
