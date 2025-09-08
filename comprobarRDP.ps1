@@ -1432,14 +1432,15 @@ function Show-MainMenu {
             $info = Get-UserInfo
             Write-Host "`nInformación del Usuario y Sistema:" -ForegroundColor Yellow
             Write-Host "  - Usuario actual: $($info.UsuarioActual)"
-            Write-Host "  - - Nombre del equipo: $($info.NombreEquipo)"
+            Write-Host "  - Nombre del equipo: $($info.NombreEquipo)"
         
-            $administrators = if ($info.AdministradoresLocales.Count -gt 0) {
-                [string]::join(', ', $info.AdministradoresLocales)
+            Write-Host "`nInformación de Administradores Locales:" -ForegroundColor Cyan
+            if ($info.AdministradoresLocales.Count -gt 0) {
+                $administrators = [string]::join(', ', $info.AdministradoresLocales)
+                Write-Host "  - Administradores locales: $administrators"
             } else {
-                "No se pudieron obtener los administradores locales."
+                Write-Host "  - No se pudieron obtener los administradores locales." -ForegroundColor Red
             }
-            Write-Host "  - Administradores locales: $administrators"
 
             Write-Host "`nInformación de Adaptadores de Red:" -ForegroundColor Cyan
             if ($info.Redes.Count -gt 0) {
@@ -1475,5 +1476,6 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
