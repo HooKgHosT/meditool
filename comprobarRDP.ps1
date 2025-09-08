@@ -970,14 +970,26 @@ function Get-UserInfo {
     $adminMembers = @()
     try {
         $adminMembers = (Get-LocalGroupMember -Group "Administrators" -ErrorAction SilentlyContinue).Name
-    } catch {
-        # Si ocurre un error, $adminMembers se quedará como un array vacío.
-    }
+    } catch {}
     
+    # Obtener información de la red y los adaptadores
+    $networkAdapters = @()
+    try {
+        $adapters = Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' }
+        foreach ($adapter in $adapters) {
+            $networkAdapters += [PSCustomObject]@{
+                "Nombre" = $adapter.Name
+                "Tipo" = $adapter.InterfaceDescription
+                "DireccionMAC" = $adapter.MacAddress
+            }
+        }
+    } catch {}
+
     $info = [PSCustomObject]@{
         "UsuarioActual" = $env:USERNAME
         "NombreEquipo" = $env:COMPUTERNAME
         "AdministradoresLocales" = $adminMembers
+        "Redes" = $networkAdapters
     }
     return $info
 }
@@ -1242,6 +1254,13 @@ function Show-MainMenu {
                 "No se pudieron obtener los administradores locales."
             }
             Write-Host "  - Administradores locales: $administrators"
+
+            Write-Host "`nInformación de Adaptadores de Red:" -ForegroundColor Cyan
+            if ($info.Redes.Count -gt 0) {
+                $info.Redes | Format-Table -AutoSize
+            } else {
+                Write-Host "  - No se encontraron adaptadores de red activos." -ForegroundColor Red
+            }
         }
         "21" {
             MacChangerMenu
@@ -1268,5 +1287,6 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
