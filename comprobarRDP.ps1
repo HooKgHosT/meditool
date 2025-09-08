@@ -20,24 +20,26 @@ if (-not $MyInvocation.MyCommand.Path -or ($MyInvocation.MyCommand.Path -ne $tem
 }
 
 
+# DIBUJO DE JERINGA ASCII HORIZONTAL
 Write-Host "
-%	  ______   ______  ______  ______   ______  ______  ______    ______  
+%     ______   ______  ______  ______   ______  ______  ______    ______  
 %	 | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
 % 	 |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
 % 	 |______| |______||______||______| |______||______||______|  |______| 
-% 	  ______  				                      ______
+% 	  ______  						                              ______
 % 	 | |__| |   _  _   ____  ___   __  _____  ____   ____  _     | |__| | 
 % 	 |  ()  |  | \/ | |____||_  \ \__/|_ _ _| / _  \/ _  \| |    |  ()  | 
 % 	 |______|  | || | | _|  | |  | ||   | |  | |.| | |.|  | |    |______| 
 % 	  ______   | || | |__|_ |_|  | ||   | |  | |_| | |_|  | |_    ______
 % 	 | |__| |  |_||_| |____||___/ /__\  |_|   \____/\____/|___|  | |__| | 
-% 	 | () | |			                             |  ()  | 
-% 	 |______|			                             |______| 
+% 	 | () | | 						                             |  ()  | 
+% 	 |______| 						                             |______| 
 % 	  ______   ______  ______  ______   ______  ______  ______    ______  
 % 	 | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
 % 	 |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
 % 	 |______| |______||______||______| |______||______||______|  |______|
 " -ForegroundColor Cyan
+
 # Variables globales para el MAC Changer
 $global:AdapterName = $null
 # Cambiar la codificación para que se muestren las tildes y la ñ correctamente
@@ -170,7 +172,7 @@ function Manage-RDP {
             Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 1
             Write-Host "RDP deshabilitado.`n" -ForegroundColor Yellow
         } elseif ($rdpOption -eq "0") {
-            # Quita la llamada a Show-MainMenu aquí. El bucle principal se encargará de esto.
+            # Volver al menú principal.
         } else {
             Write-Host "Opcion no valida." -ForegroundColor Red
         }
@@ -226,7 +228,7 @@ function Manage-WindowsTelemetry {
             Set-ItemProperty -Path $regPath -Name $regProperty -Value 0 -Type DWORD -Force
             Write-Host "`nTelemetria deshabilitada." -ForegroundColor Yellow
         } elseif ($telemetryOption -eq "0") {
-            # Quita la llamada a Show-MainMenu aquí. El bucle principal se encargará de esto.
+            # Volver al menú principal.
         } else {
             Write-Host "Opcion no válida." -ForegroundColor Red
         }
@@ -948,7 +950,6 @@ function Generate-HTMLReport {
 function Get-UserInfo {
     $adminMembers = @()
     try {
-        # Intenta obtener los miembros del grupo de administradores.
         $adminMembers = (Get-LocalGroupMember -Group "Administrators" -ErrorAction SilentlyContinue).Name
     } catch {
         # Si ocurre un error, $adminMembers se quedará como un array vacío.
@@ -1079,24 +1080,11 @@ function Update-AllWingetApps {
 # --- MENÚ PRINCIPAL ---
 function Show-MainMenu {
     Clear-Host
-Write-Host "
-%	  ______   ______  ______  ______   ______  ______  ______    ______  
-%	 | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
-% 	 |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
-% 	 |______| |______||______||______| |______||______||______|  |______| 
-% 	  ______  				                      ______
-% 	 | |__| |   _  _   ____  ___   __  _____  ____   ____  _     | |__| | 
-% 	 |  ()  |  | \/ | |____||_  \ \__/|_ _ _| / _  \/ _  \| |    |  ()  | 
-% 	 |______|  | || | | _|  | |  | ||   | |  | |.| | |.|  | |    |______| 
-% 	  ______   | || | |__|_ |_|  | ||   | |  | |_| | |_|  | |_    ______
-% 	 | |__| |  |_||_| |____||___/ /__\  |_|   \____/\____/|___|  | |__| | 
-% 	 | () | |			                             |  ()  | 
-% 	 |______|			                             |______| 
-% 	  ______   ______  ______  ______   ______  ______  ______    ______  
-% 	 | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
-% 	 |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
-% 	 |______| |______||______||______| |______||______||______|  |______|
-" -ForegroundColor Cyan
+    Write-Host "=============================================" -ForegroundColor Green
+    Write-Host "=                                           =" -ForegroundColor Green
+    Write-Host "=        Herramienta de Seguridad MediTool  =" -ForegroundColor Green
+    Write-Host "=                                           =" -ForegroundColor Green
+    Write-Host "=============================================" -ForegroundColor Green
     Write-Host "Bienvenido a MediTool, tu solución de seguridad Blue Team."
     Write-Host "Por favor, selecciona una opción del menú:"
     Write-Host ""
@@ -1209,7 +1197,6 @@ Write-Host "
             Analyze-NetworkConnections
         }
         "15" {
-            # Se ha eliminado la llamada a Close-SuspiciousConnection ya que está dentro de Analyze-NetworkConnections
             Write-Host "La opción para cerrar conexiones se encuentra dentro del análisis de red (opción 14)."
         }
         "16" {
