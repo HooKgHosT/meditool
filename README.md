@@ -1,5 +1,7 @@
 <p align="center">MediTool: Herramienta de Seguridad para Blue Team</p>
 
+<span style"color:red"><strong>NOTA IMPORTANTE!: SE NECESITA POWERSHELL 7.5.x PARA LA EJECUCIÓN SIN PROBLEMAS!!!!</strong></span>
+
 MediTool es un script de PowerShell diseñado para equipos de seguridad (Blue Team) y usuarios avanzados. Proporciona una suite de herramientas para auditar, verificar y mitigar vulnerabilidades comunes en sistemas Windows 10 y Windows 11.
 El script se auto-gestiona: se descarga, no se eleva a permisos de administrador hay que ejecutar el powershell como administrador y luego lanzar el comando posteriormente, una vez utilizado, se borra para no dejar rastros en el sistema.
 
