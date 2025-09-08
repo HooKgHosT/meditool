@@ -1,28 +1,23 @@
 # Este script esta disenado como una herramienta de seguridad (Blue Team)
 # para la verificacion y correccion de vulnerabilidades comunes en sistemas Windows 10 y 11.
 # --- AUTODESCARGA Y RELANZAMIENTO ---
-$scriptUrl = "https://raw.githubusercontent.com/HooKgHosT/meditool/main/comprobarRDP.ps1"
-$tempPath = Join-Path $env:TEMP "comprobarRDP.ps1"
-
-# Si el script aun no esta ejecutandose desde TEMP -> descargarlo y relanzar
-if (-not $MyInvocation.MyCommand.Path -or ($MyInvocation.MyInvocation.MyCommand.Path -ne $tempPath)) {
-    try {
-        # Intenta eliminar el archivo temporal si existe
-        if (Test-Path $tempPath) {
-            Remove-Item $tempPath -Force
-        }
-
-        Invoke-WebRequest -Uri $scriptUrl -OutFile $tempPath -UseBasicParsing
-        Write-Host "Descargado en: $tempPath" -ForegroundColor Cyan
-
-        # Relanzar como admin
-        Start-Process powershell -ArgumentList "-NoExit -ExecutionPolicy Bypass -File `"$tempPath`"" -Verb RunAs
-        exit
-    } catch {
-        Write-Host "Error al descargar/ejecutar: $($_.Exception.Message)" -ForegroundColor Red
-        exit 1
-    }
+function Test-AdminPrivileges {
+    $current = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+    return $current.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
+
+# Verificar si el script se esta ejecutando como administrador
+if (-not (Test-AdminPrivileges)) {
+    Write-Host "ADVERTENCIA: Este script debe ejecutarse con permisos de Administrador para funcionar correctamente." -ForegroundColor Red
+    Write-Host "Por favor, reinicie PowerShell ISE o Terminal como Administrador y ejecute el script nuevamente." -ForegroundColor Red
+    Read-Host "Presione Enter para salir."
+    exit
+}
+
+# Variables globales para el MAC Changer
+$global:AdapterName = $null
+# Cambiar la codificacion para que se muestren las tildes y la n correctamente
+$OutputEncoding = [System.Text.UTF8Encoding]::new()
 
 
 # Variables globales para el MAC Changer
@@ -1352,3 +1347,4 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
