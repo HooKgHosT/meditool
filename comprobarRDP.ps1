@@ -1114,55 +1114,53 @@ function Clean-TempFolder {
     }
 }
 function Check-ISO27001Status {
-    Write-Host @"
-    ========================================================
-    ==            Estado de Seguridad (ISO 27001)         ==
-    ========================================================
-"@ -ForegroundColor Cyan
+    Write-Host "======================================================== -ForegroundColor Cyan
+    Write-Host "==            Estado de Seguridad (ISO 27001)         == -ForegroundColor Cyan
+    Write-Host "======================================================== -ForegroundColor Cyan
     
     $passed = $true
     
     # Control A.5.1.1: Políticas de seguridad
-    Write-Host "[✅] A.5.1.1 - Se ha detectado una política de contraseñas." -ForegroundColor Green
+    Write-Host "A.5.1.1 - Se ha detectado una política de contraseñas." -ForegroundColor Green
     
     # Control A.12.2.1: Controles contra el malware
-    Write-Host "`n[🔍] Verificando el estado del antivirus..."
+    Write-Host "`nVerificando el estado del antivirus..."
     try {
         $defenderStatus = Get-MpComputerStatus
         if ($defenderStatus.AntivirusEnabled -eq $true) {
-            Write-Host "[✅] A.12.2.1 - Windows Defender está activo y en ejecución." -ForegroundColor Green
+            Write-Host "A.12.2.1 - Windows Defender está activo y en ejecución." -ForegroundColor Green
         } else {
-            Write-Host "[❌] A.12.2.1 - Windows Defender está deshabilitado. Se recomienda activarlo." -ForegroundColor Red
+            Write-Host "A.12.2.1 - Windows Defender está deshabilitado. Se recomienda activarlo." -ForegroundColor Red
             $passed = $false
         }
     } catch {
-        Write-Host "[❌] A.12.2.1 - No se pudo verificar el estado del antivirus." -ForegroundColor Red
+        Write-Host "A.12.2.1 - No se pudo verificar el estado del antivirus." -ForegroundColor Red
         $passed = $false
     }
 
     # Control A.13.2.1: Procedimientos de inicio de sesión seguros
-    Write-Host "`n[🔍] Verificando el servicio de RDP (Escritorio Remoto)..."
+    Write-Host "`nVerificando el servicio de RDP (Escritorio Remoto)..."
     $rdpStatus = Get-ItemPropertyValue -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -ErrorAction SilentlyContinue
     if ($rdpStatus -eq 1) {
-        Write-Host "[✅] A.13.2.1 - El servicio RDP está deshabilitado." -ForegroundColor Green
+        Write-Host "A.13.2.1 - El servicio RDP está deshabilitado." -ForegroundColor Green
     } else {
-        Write-Host "[⚠️] A.13.2.1 - El servicio RDP está habilitado. Asegúrate de que sea necesario y esté protegido." -ForegroundColor Yellow
+        Write-Host "A.13.2.1 - El servicio RDP está habilitado. Asegúrate de que sea necesario y esté protegido." -ForegroundColor Yellow
     }
 
     # Control A.12.1.2: Gestión de cambios
-    Write-Host "`n[🔍] Verificando actualizaciones de aplicaciones con winget..."
+    Write-Host "`nVerificando actualizaciones de aplicaciones con winget..."
     try {
         $wingetResult = winget upgrade --all -q | Out-String
         if ($wingetResult -match "No se encontraron paquetes para actualizar.") {
-            Write-Host "[✅] A.12.1.2 - No hay actualizaciones pendientes para aplicaciones con winget." -ForegroundColor Green
+            Write-Host "A.12.1.2 - No hay actualizaciones pendientes para aplicaciones con winget." -ForegroundColor Green
         } else {
-            Write-Host "[⚠️] A.12.1.2 - Se encontraron actualizaciones pendientes. Se recomienda actualizarlas para mitigar vulnerabilidades." -ForegroundColor Yellow
+            Write-Host "A.12.1.2 - Se encontraron actualizaciones pendientes. Se recomienda actualizarlas para mitigar vulnerabilidades." -ForegroundColor Yellow
         }
     } catch {
-        Write-Host "[❌] A.12.1.2 - No se pudo verificar las actualizaciones con winget." -ForegroundColor Red
+        Write-Host "A.12.1.2 - No se pudo verificar las actualizaciones con winget." -ForegroundColor Red
     }
 
-    Write-Host "`n[💡] Recordatorio: Esta es una verificación simplificada de controles de ISO 27001." -ForegroundColor White
+    Write-Host "`nRecordatorio: Esta es una verificación simplificada de controles de ISO 27001." -ForegroundColor White
     Write-Host "Un análisis completo requiere una auditoría profesional de seguridad de la información." -ForegroundColor White
     Write-Host "========================================================" -ForegroundColor Cyan
 }
