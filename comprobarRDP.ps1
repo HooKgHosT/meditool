@@ -105,7 +105,7 @@ function Get-FirewallStatus {
         
         try {
             $allRules = Get-NetFirewallRule | Where-Object { 
-                $_.Enabled -eq "True" -and ($_.Direction -eq "Inbound" -or $_.Direction -eq "Both") -and ($_.Action -eq "Allow") -and -not [string]::IsNullOrEmpty($_.ProgramName)
+                $_.Enabled -eq "True" -and ($_.Direction -eq "Inbound" -or $_.Direction -eq "Both") -and ($_.Action -eq "Allow")
             }
 
             if ($allRules.Count -gt 0) {
@@ -1692,6 +1692,7 @@ while ($true) {
 }
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
