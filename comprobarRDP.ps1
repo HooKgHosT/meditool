@@ -1,7 +1,7 @@
 # Este script está diseñado como una herramienta de seguridad (Blue Team)
 # para la verificación y corrección de vulnerabilidades comunes en sistemas Windows 10 y 11.
 # --- AUTODESCARGA Y RELANZAMIENTO ---
-$scriptUrl = "https://github.com/HooKgHosT/meditool/edit/main/comprobarRDP.ps1"
+$scriptUrl = "https://raw.githubusercontent.com/HooKgHosT/meditool/main/comprobarRDP.ps1"
 $tempPath  = Join-Path $env:TEMP "comprobarRDP.ps1"
 
 # Si el script aún no está ejecutándose desde TEMP → descargarlo y relanzar
@@ -983,6 +983,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
