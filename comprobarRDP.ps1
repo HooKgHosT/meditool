@@ -1626,7 +1626,28 @@ function Show-MainMenu {
             Read-Host | Out-Null
         }
         "20" {
-            Get-UserInfo
+            $info = Get-UserInfo
+            Write-Host "`nInformacion del Usuario y Sistema:" -ForegroundColor Yellow
+            Write-Host "  - Usuario actual: $($info.UsuarioActual)"
+            Write-Host "  - Nombre del equipo: $($info.NombreEquipo)"
+        
+            Write-Host "`nInformacion de Administradores Locales:" -ForegroundColor Cyan
+            if ($info.AdministradoresLocales.Count -gt 0) {
+                $administrators = [string]::join(', ', $info.AdministradoresLocales)
+                Write-Host "  - Administradores locales: $administrators"
+            } else {
+                Write-Host "  - No se pudieron obtener los administradores locales." -ForegroundColor Red
+            }
+
+            Write-Host "`nInformacion de Adaptadores de Red:" -ForegroundColor Cyan
+            if ($info.Redes.Count -gt 0) {
+                $info.Redes | Format-Table -AutoSize
+            } else {
+                Write-Host "  - No se encontraron adaptadores de red activos." -ForegroundColor Red
+            }
+            
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "21" {
             MacChangerMenu
@@ -1671,6 +1692,7 @@ while ($true) {
 }
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
