@@ -1107,15 +1107,19 @@ function Get-UserInfo {
     # Obtener informacion de la red y los adaptadores
     $networkAdapters = @()
     try {
-        $adapters = Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' }
-        foreach ($adapter in $adapters) {
-            $networkAdapters += [PSCustomObject]@{
-                "Nombre" = $adapter.Name
-                "Tipo" = $adapter.InterfaceDescription
-                "DireccionMAC" = $adapter.MacAddress
+        $adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' -and $_.Virtual -eq $false }
+        if ($adapters) {
+            foreach ($adapter in $adapters) {
+                $networkAdapters += [PSCustomObject]@{
+                    "Nombre" = $adapter.Name
+                    "Tipo" = $adapter.InterfaceDescription
+                    "DireccionMAC" = $adapter.MacAddress
+                }
             }
         }
-    } catch {}
+    } catch {
+        Write-Host "Error al obtener informacion de los adaptadores de red." -ForegroundColor Red
+    }
 
     $info = [PSCustomObject]@{
         "UsuarioActual" = $env:USERNAME
@@ -1471,4 +1475,5 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
