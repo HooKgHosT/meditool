@@ -1,6 +1,6 @@
 # Este script esta disenado como una herramienta de seguridad (Blue Team)
 # para la verificacion y correccion de vulnerabilidades comunes en sistemas Windows 10 y 11.
-# --- Lógica de autodescarga y relanzamiento con permisos elevados ---
+# --- Lógica de autodescarga, elevación de permisos y limpieza ---
 $scriptName = "meditool.ps1"
 $scriptUrl = "https://raw.githubusercontent.com/HooKgHosT/meditool/main/meditool.ps1"
 $tempPath = Join-Path $env:TEMP $scriptName
@@ -10,26 +10,52 @@ function Test-AdminPrivileges {
     return $current.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# Si la ruta actual NO es la ruta temporal y el script NO se esta ejecutando como Administrador...
+# La condicion para relanzar es:
+# 1. La ruta actual del script NO es la ruta temporal (es la primera ejecucion).
+# 2. El script NO se esta ejecutando ya con permisos de Administrador.
 if ($MyInvocation.MyCommand.Path -ne $tempPath -and -not (Test-AdminPrivileges)) {
     try {
-        # Descarga el script a la carpeta temporal.
+        Write-Host "Iniciando la descarga del script temporal..." -ForegroundColor Yellow
+        # Descarga el script de GitHub y lo guarda en la carpeta temporal.
+        # Usa -Force para reemplazarlo si ya existe.
         Invoke-WebRequest -Uri $scriptUrl -OutFile $tempPath -UseBasicParsing -ErrorAction Stop
-        Write-Host "Descargado en: $tempPath" -ForegroundColor Cyan
 
-        # Relanza el script desde la carpeta temporal con permisos de Administrador.
+        Write-Host "Descargado en: $tempPath" -ForegroundColor Cyan
+        
+        # Relanza el script desde la ruta temporal con permisos de Administrador.
         Start-Process powershell -ArgumentList "-NoExit -ExecutionPolicy Bypass -File `"$tempPath`"" -Verb RunAs
-        exit
+        exit # Salir de la instancia actual para evitar el bucle.
     } catch {
-        Write-Host "Error al descargar o relanzar: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Error al descargar o relanzar el script: $($_.Exception.Message)" -ForegroundColor Red
         Write-Host "Asegurese de tener conexion a Internet y de que el link sea correcto." -ForegroundColor Red
         exit 1
     }
 }
 
-# Esta parte solo se ejecuta si ya se relanzo el script con permisos de Administrador.
+# La ejecucion continuara aqui solo si el script ya se ha relanzado con permisos.
 if (Test-AdminPrivileges) {
     Write-Host "El script se esta ejecutando con permisos de Administrador." -ForegroundColor Green
+}
+
+# Variables globales para el MAC Changer
+$global:AdapterName = $null
+# Cambiar la codificacion para que se muestren los caracteres especiales correctamente
+$OutputEncoding = [System.Text.UTF8Encoding]::new()
+
+# --- Funciones de seguridad ---
+
+function Get-SafeAuthenticodeSignature {
+    param(
+        [string]$Path
+    )
+    try {
+        if (Test-Path -Path $Path -PathType Leaf) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $Path -ErrorAction Stop
+            return $signature
+        }
+    } catch {
+        return [PSCustomObject]@{ Status = "Unknown" }
+    }
 }
 
 # Variables globales para el MAC Changer
@@ -1365,6 +1391,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
