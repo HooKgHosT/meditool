@@ -446,9 +446,16 @@ function Block-FileExecution {
         [string]$FileToBlock
     )
     
+    # Si la ruta no se proporciona como parámetro, la solicitamos al usuario.
     if (-not $FileToBlock) {
         Write-Host "Ingrese la ruta del archivo que desea bloquear (ej. C:\malware.exe):" -ForegroundColor Cyan
         $FileToBlock = Read-Host "Ruta del archivo"
+    }
+
+    # Nueva validación para verificar si el usuario no ingresó nada.
+    if ([string]::IsNullOrEmpty($FileToBlock)) {
+        Write-Host "Error: No se ha proporcionado una ruta de archivo. Volviendo al menú principal." -ForegroundColor Red
+        return
     }
     
     if (-not (Test-Path $FileToBlock)) {
@@ -461,6 +468,7 @@ function Block-FileExecution {
         Write-Host "Regla de Firewall '$ruleName' creada para bloquear la ejecución de '$FileToBlock'." -ForegroundColor Green
     } catch {
         Write-Host "Error al crear la regla de Firewall. Asegurese de tener permisos de Administrador." -ForegroundColor Red
+        Write-Host "Detalles del error: $($_.Exception.Message)" -ForegroundColor Red
     }
 }
 
@@ -1290,6 +1298,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
