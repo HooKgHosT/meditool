@@ -1,21 +1,21 @@
 # Este script está diseñado como una herramienta de seguridad (Blue Team)
 # para la verificación y corrección de vulnerabilidades comunes en sistemas Windows 10 y 11.
-# --- Comprobacion de permisos de administrador ---
-if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+# --- AUTODESCARGA Y RELANZAMIENTO ---
+$scriptUrl = "https://github.com/HooKgHosT/meditool/edit/main/comprobarRDP.ps1"
+$tempPath  = Join-Path $env:TEMP "blue_team_tool.ps1"
+
+# Si el script aún no está ejecutándose desde TEMP → descargarlo y relanzar
+if (-not $MyInvocation.MyCommand.Path -or ($MyInvocation.MyCommand.Path -ne $tempPath)) {
     try {
-        # Crear archivo temporal con el script actual
-        $tempScript = [System.IO.Path]::GetTempFileName().Replace(".tmp",".ps1")
+        Invoke-WebRequest -Uri $scriptUrl -OutFile $tempPath -UseBasicParsing
+        Write-Host "Descargado en: $tempPath" -ForegroundColor Cyan
 
-        # Guardar el contenido actual en ese archivo
-        Get-Content -Path $PSCommandPath | Set-Content -Path $tempScript -Encoding UTF8
-
-        # Relanzar como administrador ejecutando el archivo temporal y dejar la consola abierta
-        Start-Process powershell -Verb RunAs -ArgumentList "-NoExit -ExecutionPolicy Bypass -File `"$tempScript`""
+        # Relanzar como admin
+        Start-Process powershell -ArgumentList "-NoExit -ExecutionPolicy Bypass -File `"$tempPath`"" -Verb RunAs
         exit
     } catch {
-        Write-Host "Error al intentar relanzar el script como Administrador." -ForegroundColor Red
-        pause
-        exit
+        Write-Host "Error al descargar/ejecutar: $($_.Exception.Message)" -ForegroundColor Red
+        exit 1
     }
 }
 
@@ -983,6 +983,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
