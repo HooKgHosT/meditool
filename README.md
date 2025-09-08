@@ -34,13 +34,10 @@ Al ejecutarlo, el script se descargará temporalmente, se relanzará con permiso
 
 Este proyecto está bajo la licencia MIT. Puedes ver el archivo LICENSE para más detalles.
 
-<p align="center">:busts_in_silhouette: Contacto :busts_in_silhouette: </p>
+<p align="center">### :busts_in_silhouette: Contacto :busts_in_silhouette:</p>
 
 Para sugerencias, reportes de errores o si quieres contribuir, puedes contactarme a través de:
 
-GitHub: <a href="https://github.com/HooKgHosT">@HooKgHosT</a>
-
-LinkedIn: <a href="https://www.linkedin.com/in/d4n1feij00/">D4N1FEIJ00</a>
-
-Discord: Me puedes encontrar como <strong>ELMOnymous</strong> en el servidor de EvilSec.
-
+* **GitHub**: <a href="https://github.com/HooKgHosT">[@HooKgHosT]</a>(https://github.com/HooKgHosT)
+* **LinkedIn**: <a href="https://www.linkedin.com/in/d4n1feij00/>[D4N1FEIJ00]</a>(https://www.linkedin.com/in/d4n1feij00/)
+* **Discord**: Me puedes encontrar como <strong>`ELMOnymous`</strong> en el servidor de EvilSec.
