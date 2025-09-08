@@ -1375,7 +1375,7 @@ function Clean-SystemJunk {
                 try {
                     Remove-Item -Path $item.FullName -Recurse -Force -ErrorAction Stop
                 } catch {
-                    # Si el archivo está en uso, se notifica al usuario
+                    # Si el archivo esta en uso, se notifica al usuario
                     Write-Host "Advertencia: No se pudo eliminar $($item.FullName). El archivo esta en uso." -ForegroundColor Red
                     
                     # Intentar encontrar el proceso que lo usa
@@ -1657,6 +1657,7 @@ while ($true) {
 }
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
