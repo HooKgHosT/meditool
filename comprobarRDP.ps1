@@ -1524,12 +1524,10 @@ function Show-MainMenu {
 # Iniciar el bucle del menú
 while ($true) {
     Show-MainMenu
-    Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
-    Read-Host | Out-Null
 }
-
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
