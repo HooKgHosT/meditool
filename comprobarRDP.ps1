@@ -1,18 +1,20 @@
 # Este script esta disenado como una herramienta de seguridad (Blue Team)
 # para la verificacion y correccion de vulnerabilidades comunes en sistemas Windows 10 y 11.
-# --- AUTODESCARGA Y RELANZAMIENTO ---
-function Test-AdminPrivileges {
-    $current = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-    return $current.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-}
 
+
+# --- AUTODESCARGA Y RELANZAMIENTO ---
+#function Test-AdminPrivileges {
+#    $current = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+#    return $current.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+#}
+#
 # Verificar si el script se esta ejecutando como administrador
-if (-not (Test-AdminPrivileges)) {
-    Write-Host "ADVERTENCIA: Este script debe ejecutarse con permisos de Administrador para funcionar correctamente." -ForegroundColor Red
-    Write-Host "Por favor, reinicie PowerShell ISE o Terminal como Administrador y ejecute el script nuevamente." -ForegroundColor Red
-    Read-Host "Presione Enter para salir."
-    exit
-}
+#if (-not (Test-AdminPrivileges)) {
+#    Write-Host "ADVERTENCIA: Este script debe ejecutarse con permisos de Administrador para funcionar correctamente." -ForegroundColor Red
+#    Write-Host "Por favor, reinicie PowerShell ISE o Terminal como Administrador y ejecute el script nuevamente." -ForegroundColor Red
+#    Read-Host "Presione Enter para salir."
+#    exit
+#}
 
 # Variables globales para el MAC Changer
 $global:AdapterName = $null
@@ -1347,4 +1349,5 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
