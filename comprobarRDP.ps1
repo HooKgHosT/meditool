@@ -1,31 +1,36 @@
 # Este script esta disenado como una herramienta de seguridad (Blue Team)
 # para la verificacion y correccion de vulnerabilidades comunes en sistemas Windows 10 y 11.
+# --- Lógica de autodescarga y relanzamiento con permisos elevados ---
+$scriptName = "meditool.ps1"
+$scriptUrl = "https://raw.githubusercontent.com/HooKgHosT/meditool/main/meditool.ps1"
+$tempPath = Join-Path $env:TEMP $scriptName
 
 function Test-AdminPrivileges {
     $current = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
     return $current.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-if (-not (Test-AdminPrivileges)) {
-    Write-Host "No se esta ejecutando como Administrador. Relanzando con permisos elevados..." -ForegroundColor Yellow
-    # Relanza el script en una nueva ventana de PowerShell con permisos de Administrador.
-    Start-Process powershell -ArgumentList "-NoExit -ExecutionPolicy Bypass -File `"$MyInvocation.MyCommand.Path`"" -Verb RunAs
-    exit
+# Si la ruta actual NO es la ruta temporal y el script NO se esta ejecutando como Administrador...
+if ($MyInvocation.MyCommand.Path -ne $tempPath -and -not (Test-AdminPrivileges)) {
+    try {
+        # Descarga el script a la carpeta temporal.
+        Invoke-WebRequest -Uri $scriptUrl -OutFile $tempPath -UseBasicParsing -ErrorAction Stop
+        Write-Host "Descargado en: $tempPath" -ForegroundColor Cyan
+
+        # Relanza el script desde la carpeta temporal con permisos de Administrador.
+        Start-Process powershell -ArgumentList "-NoExit -ExecutionPolicy Bypass -File `"$tempPath`"" -Verb RunAs
+        exit
+    } catch {
+        Write-Host "Error al descargar o relanzar: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Asegurese de tener conexion a Internet y de que el link sea correcto." -ForegroundColor Red
+        exit 1
+    }
 }
 
-# --- AUTODESCARGA Y RELANZAMIENTO ---
-#function Test-AdminPrivileges {
-#    $current = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-#    return $current.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-#}
-#
-# Verificar si el script se esta ejecutando como administrador
-#if (-not (Test-AdminPrivileges)) {
-#    Write-Host "ADVERTENCIA: Este script debe ejecutarse con permisos de Administrador para funcionar correctamente." -ForegroundColor Red
-#    Write-Host "Por favor, reinicie PowerShell ISE o Terminal como Administrador y ejecute el script nuevamente." -ForegroundColor Red
-#    Read-Host "Presione Enter para salir."
-#    exit
-#}
+# Esta parte solo se ejecuta si ya se relanzo el script con permisos de Administrador.
+if (Test-AdminPrivileges) {
+    Write-Host "El script se esta ejecutando con permisos de Administrador." -ForegroundColor Green
+}
 
 # Variables globales para el MAC Changer
 $global:AdapterName = $null
@@ -1360,6 +1365,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
