@@ -1358,8 +1358,9 @@ function Clean-SystemJunk {
     
     # Se crea un filtro para proteger el script que se esta ejecutando
     # Si el script se ejecuta en memoria, se usa un nombre de archivo por defecto
-    $scriptFileName = if ($MyInvocation.MyCommand.Path) {
-        Split-Path -Path $MyInvocation.MyCommand.Path -Leaf
+    $scriptPath = $MyInvocation.MyCommand.Path
+    $scriptFileName = if ($scriptPath) {
+        Split-Path -Path $scriptPath -Leaf
     } else {
         "meditool.ps1"
     }
@@ -1375,7 +1376,7 @@ function Clean-SystemJunk {
                 try {
                     Remove-Item -Path $item.FullName -Recurse -Force -ErrorAction Stop
                 } catch {
-                    # Si el archivo esta en uso, se notifica al usuario
+                    # Si el archivo está en uso, se notifica al usuario
                     Write-Host "Advertencia: No se pudo eliminar $($item.FullName). El archivo esta en uso." -ForegroundColor Red
                     
                     # Intentar encontrar el proceso que lo usa
@@ -1657,6 +1658,7 @@ while ($true) {
 }
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
