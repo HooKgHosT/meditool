@@ -18,9 +18,7 @@ meditool.ps1: El script principal de la herramienta.
 
 :gear: Cómo usarlo :gear:
 
-Para ejecutar MediTool, simplemente abre una terminal de PowerShell como Administrador y ejecuta el siguiente comando:
-
-Importante: Es recomendable ejecutar la terminal directamente con privilegios elevados para evitar errores de ejecución..
+¡¡IMPORTANTE!!: Es recomendable ejecutar la terminal directamente con privilegios elevados para evitar errores de ejecución..
 
 <p align="center">"irm https://raw.githubusercontent.com/HooKgHosT/meditool/main/comprobarRDP.ps1 | iex" </p>
 
