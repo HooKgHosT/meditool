@@ -292,7 +292,67 @@ function Invoke-CredentialHardeningChecks {
     Write-Host "`n--- Chequeo de Credenciales finalizado ---" -ForegroundColor Cyan
 }
 
+function Invoke-CriticalEventsAudit {
+    Write-Host "`n--- Realizando Auditoría de Eventos de Seguridad Críticos ---" -ForegroundColor Cyan
 
+    # 1. Buscar eventos de borrado del registro de seguridad (ID 1102)
+    Write-Host "`n[1] Buscando intentos de borrado de huellas (Log de Seguridad)..." -ForegroundColor Yellow
+    try {
+        $clearedLogs = Get-WinEvent -LogName Security -FilterXPath "*[System[EventID=1102]]" -ErrorAction Stop
+        if ($clearedLogs) {
+            Write-Host "[ALERTA] ¡Se ha detectado que el registro de seguridad ha sido borrado!" -ForegroundColor Red
+            Write-Host "Esto es un fuerte indicador de que un atacante ha intentado cubrir sus huellas." -ForegroundColor Red
+            $clearedLogs | Select-Object TimeCreated, Id, Message | Format-List
+        } else {
+            Write-Host "[OK] No se encontraron eventos de borrado del registro de seguridad." -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "[INFO] No se encontraron eventos de borrado o no se pudo acceder al log de seguridad." -ForegroundColor Cyan
+    }
+
+    # Podríamos añadir más eventos críticos aquí en el futuro (ej. creación de cuentas, cambios de grupo, etc.)
+
+    Write-Host "`n--- Auditoría de Eventos Críticos finalizada ---" -ForegroundColor Cyan
+}
+
+function Invoke-LocalPolicyChecks {
+    Write-Host "`n--- Verificando Políticas de Seguridad Locales Fundamentales ---" -ForegroundColor Cyan
+
+    # 1. Verificar estado de UAC (User Account Control)
+    Write-Host "`n[1] Verificando estado de User Account Control (UAC)..." -ForegroundColor Yellow
+    $uacKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
+    $uacEnabled = Get-ItemPropertyValue -Path $uacKey -Name "EnableLUA" -ErrorAction SilentlyContinue
+    if ($uacEnabled -eq 1) {
+        Write-Host "[OK] User Account Control (UAC) está HABILITADO." -ForegroundColor Green
+    } else {
+        Write-Host "[VULNERABLE] User Account Control (UAC) está DESHABILITADO. Esto elimina una capa de seguridad importante." -ForegroundColor Red
+    }
+
+    # 2. Verificar estado de cifrado de disco con BitLocker
+    Write-Host "`n[2] Verificando estado de cifrado de disco (BitLocker)..." -ForegroundColor Yellow
+    try {
+        $bitlockerVolume = Get-BitLockerVolume -MountPoint $env:SystemDrive -ErrorAction Stop
+        if ($bitlockerVolume.ProtectionStatus -eq 'On') {
+            Write-Host "[OK] La unidad del sistema ($($env:SystemDrive)) está CIFRADA con BitLocker." -ForegroundColor Green
+        } else {
+            Write-Host "[ADVERTENCIA] La unidad del sistema ($($env:SystemDrive)) NO está cifrada. Los datos están en riesgo en caso de robo físico." -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "[INFO] No se pudo determinar el estado de BitLocker. Puede que no esté instalado o soportado." -ForegroundColor Cyan
+    }
+
+    # 3. Mostrar la política de contraseñas local
+    Write-Host "`n[3] Mostrando política de contraseñas local..." -ForegroundColor Yellow
+    $netAccounts = net accounts
+    if ($netAccounts) {
+        Write-Host "[INFO] La política de contraseñas configurada en este equipo es:" -ForegroundColor Cyan
+        $netAccounts
+    } else {
+        Write-Host "[ERROR] No se pudo obtener la política de contraseñas." -ForegroundColor Red
+    }
+
+    Write-Host "`n--- Verificación de Políticas Locales finalizada ---" -ForegroundColor Cyan
+}
 
 function Fix-FirewallPorts {
     Write-Host "Cerrando puertos inseguros (RDP/WinRM)..." -ForegroundColor Yellow
@@ -1070,6 +1130,12 @@ function Show-MainMenu {
         [PSCustomObject]@{ "ID" = 27; "Opcion" = "Realizar Análisis Completo del Sistema (Necesario para Reporte)" },
         [PSCustomObject]@{ "ID" = 28; "Opcion" = "Realizar Chequeo Anti-PEAS (Hardening)" },
         [PSCustomObject]@{ "ID" = 29; "Opcion" = "Realizar Chequeo Anti-Robo-Credenciales (Hardening)" },
+        [PSCustomObject]@{ "ID" = 30; "Opcion" = "Auditar Eventos Críticos (Borrado de Logs)" },
+        [PSCustomObject]@{ "ID" = 31; "Opcion" = "Verificar Políticas de Seguridad Locales (UAC, BitLocker)" },
+        [PSCustomObject]@{ "ID" = 88; "Opcion" = "Activar Windows (Advertencia de Seguridad)" },
+        [PSCustomObject]@{ "ID" = 99; "Opcion" = "Mensaje ELMOnymous (h00kGh0st)" },
+        [PSCustomObject]@{ "ID" = 0; "Opcion" = "Salir" }
+    )
         [PSCustomObject]@{ "ID" = 88; "Opcion" = "Activar Windows (Advertencia de Seguridad)" },
         [PSCustomObject]@{ "ID" = 99; "Opcion" = "Mensaje ELMOnymous (h00kGh0st)" },
         [PSCustomObject]@{ "ID" = 0; "Opcion" = "Salir" }
@@ -1124,7 +1190,15 @@ while ($true) {
             Write-Host "Análisis completo y captura de estado finalizados." -ForegroundColor Green
         }
         "28" { Invoke-PeasHardeningChecks }
-        "29" { Invoke-CredentialHardeningChecks }
+        "29" {
+            Invoke-CredentialHardeningChecks
+        }
+        "30" { # <--- AÑADE ESTE BLOQUE
+            Invoke-CriticalEventsAudit
+        }
+        "31" { # <--- AÑADE ESTE BLOQUE
+            Invoke-LocalPolicyChecks
+        }
         "88" { Activate-Windows }
         "99" { Write-Host "Copyright (c) 2023 h00kGh0st" -ForegroundColor Cyan }
         "0" {
