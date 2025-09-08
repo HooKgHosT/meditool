@@ -1185,9 +1185,6 @@ function Get-UserInfo {
     } catch {
         Write-Host "Error al obtener informacion de los adaptadores de red." -ForegroundColor Red
     }
-
-    Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
-    Read-Host | Out-Null
 }
 
 function Set-WindowFocus {
@@ -1674,6 +1671,7 @@ while ($true) {
 }
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
