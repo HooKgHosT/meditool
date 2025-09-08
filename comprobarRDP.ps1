@@ -130,18 +130,41 @@ function Get-LastOutgoingRDPConnection {
 }
 
 function Get-FirewallStatus {
-    Write-Host "`nMostrando todas las reglas de firewall de entrada activas. Esto puede tardar unos segundos..." -ForegroundColor Yellow
+    Write-Host "`nMostrando reglas de firewall de entrada activas (visibilidad optimizada para consolas)..." -ForegroundColor Yellow
 
     try {
         # Obtenemos todas las reglas de firewall activas que permiten conexiones de entrada.
-        # No se aplica ningun filtro, mostrando la configuracion completa.
         $allRules = Get-NetFirewallRule | Where-Object { 
             $_.Enabled -eq "True" -and ($_.Direction -eq "Inbound" -or $_.Direction -eq "Both") -and ($_.Action -eq "Allow") 
         }
 
         if ($allRules.Count -gt 0) {
-            Write-Host "Se encontraron las siguientes reglas de firewall que permiten conexiones entrantes:" -ForegroundColor Red
-            $allRules | Select-Object DisplayName, Direction, Action, Profile, Protocol, LocalPort, ProgramName | Format-Table -AutoSize
+            Write-Host "Se encontraron las siguientes reglas de firewall:" -ForegroundColor Green
+
+            # Se usa ForEach-Object para procesar cada regla individualmente
+            $allRules | Select-Object @{Name="Regla"; Expression={
+                $ruleName = $_.DisplayName
+                if ($ruleName.Length -gt 10) {
+                    $ruleName.Substring(0, 7) + "..."
+                } else {
+                    $ruleName
+                }
+            }}, @{Name="Protocolo"; Expression={$_.Protocol}},
+            @{Name="Puerto"; Expression={$_.LocalPort}},
+            @{Name="Programa"; Expression={
+                $program = $_.ProgramName
+                if ([string]::IsNullOrEmpty($program)) {
+                    "N/A"
+                } else {
+                    $fileName = Split-Path -Path $program -Leaf
+                    if ($fileName.Length -gt 15) {
+                        $fileName.Substring(0, 12) + "..."
+                    } else {
+                        $fileName
+                    }
+                }
+            }} | Format-Table -AutoSize
+            
         } else {
             Write-Host "No se encontraron reglas de firewall que permitan conexiones entrantes." -ForegroundColor Green
         }
@@ -150,7 +173,6 @@ function Get-FirewallStatus {
         Write-Host "Error al obtener las reglas del Firewall. Verifique si el comando se ejecuto con privilegios de Administrador y reintente." -ForegroundColor Red
     }
 }
-
 function Fix-FirewallPorts {
     Write-Host "Cerrando puertos abiertos no seguros..." -ForegroundColor Yellow
     try {
@@ -1384,6 +1406,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
