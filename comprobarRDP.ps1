@@ -962,26 +962,31 @@ function Find-HiddenFilesAndScan {
 
 
 function Audit-FailedLogons {
-    Write-Host "`nAuditando inicios de sesión fallidos de las últimas 24 horas..." -ForegroundColor Yellow
+    Write-Host "`nAuditando inicios de sesion fallidos de las ultimas 24 horas..." -ForegroundColor Yellow
     $lastDay = (Get-Date).AddDays(-1)
     
     try {
-        $failedLogons = Get-WinEvent -FilterHashtable @{ Logname = 'Security'; Id = 4625; StartTime = $lastDay } -ErrorAction Stop
+        # Se usa un filtro mas especifico para evitar errores en Get-WinEvent
+        $failedLogons = Get-WinEvent -FilterHashtable @{ 
+            Logname = 'Security'; 
+            Id = 4625; 
+            StartTime = $lastDay 
+        } -ErrorAction Stop
         
         if ($failedLogons) {
-            Write-Host "Se encontraron los siguientes intentos de inicio de sesión fallidos:" -ForegroundColor Red
+            Write-Host "Se encontraron los siguientes intentos de inicio de sesion fallidos:" -ForegroundColor Red
             $failedLogons | Select-Object TimeCreated, @{ Name = 'Usuario'; Expression = { $_.Properties[5].Value } }, @{ Name = 'Origen'; Expression = { $_.Properties[18].Value } } |
             Format-Table -AutoSize
         } else {
-            Write-Host "No se encontraron intentos de inicio de sesión fallidos en las últimas 24 horas." -ForegroundColor Green
+            Write-Host "No se encontraron intentos de inicio de sesion fallidos en las ultimas 24 horas." -ForegroundColor Green
         }
         
     } catch {
         if ($_.Exception.Message -like "*No se encontraron eventos*") {
-            Write-Host "No se encontraron intentos de inicio de sesión fallidos en las últimas 24 horas." -ForegroundColor Green
+            Write-Host "No se encontraron intentos de inicio de sesion fallidos en las ultimas 24 horas." -ForegroundColor Green
         } else {
-            Write-Host "Error al acceder al registro de eventos. Detalles del error: $($_.Exception.Message)" -ForegroundColor Red
-            Write-Host "Asegúrese de ejecutar el script como Administrador." -ForegroundColor Red
+            Write-Host "Error al acceder al registro de eventos de seguridad. Verifique que su cuenta tiene los privilegios de seguridad necesarios." -ForegroundColor Red
+            Write-Host "Detalles del error: $($_.Exception.Message)" -ForegroundColor Red
         }
     }
 }
@@ -1360,60 +1365,70 @@ function Show-MainMenu {
     Write-Host "=         Herramienta de Seguridad MediTool =" -ForegroundColor Green
     Write-Host "=                                           =" -ForegroundColor Green
     Write-Host "=============================================" -ForegroundColor Green
-    Write-Host "Bienvenido a MediTool, tu solución de seguridad Blue Team."
-    Write-Host "Por favor, selecciona una opción del menú:"
+    Write-Host "Bienvenido a MediTool, tu solucion de seguridad Blue Team."
+    Write-Host "Por favor, selecciona una opcion del menu:"
     Write-Host ""
     
     $menuOptions = @(
-        [PSCustomObject]@{ "ID" = 1; "Opcion" = "Revisar Estado de RDP y Últimas Conexiones"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 1; "Opcion" = "Revisar Estado de RDP y Ultimas Conexiones"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 2; "Opcion" = "Auditar Reglas de Firewall Inseguras"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 3; "Opcion" = "Cerrar Puertos Inseguros (RDP/WinRM)"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 4; "Opcion" = "Administrar el servicio de RDP"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 5; "Opcion" = "Administrar la Telemetría de Windows"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 5; "Opcion" = "Administrar la Telemetria de Windows"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 6; "Opcion" = "Buscar Tareas Programadas Maliciosas"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 7; "Opcion" = "Auditar Servicios No Esenciales"; "Estado" = "N/A" },     
         [PSCustomObject]@{ "ID" = 8; "Opcion" = "Buscar Cuentas de Usuario Inactivas"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 9; "Opcion" = "Verificar Firmas de Archivos Críticos"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 10; "Opcion" = "Verificar Procesos en Ejecución sin Firma"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 9; "Opcion" = "Verificar Firmas de Archivos Criticos"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 10; "Opcion" = "Verificar Procesos en Ejecucion sin Firma"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 11; "Opcion" = "Detener Procesos Sin Firma"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 12; "Opcion" = "Bloquear Ejecución de Archivo"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 13; "Opcion" = "Auditar Registro de Inicio Automático (Autorun)"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 12; "Opcion" = "Bloquear Ejecucion de Archivo"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 13; "Opcion" = "Auditar Registro de Inicio Automatico (Autorun)"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 14; "Opcion" = "Analizar Conexiones de Red"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 15; "Opcion" = "Mensaje ELMOnymous (h00kGh0st)"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 16; "Opcion" = "Buscar Archivos Ocultos"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 17; "Opcion" = "Auditar Inicios de Sesión Fallidos"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 17; "Opcion" = "Auditar Inicios de Sesion Fallidos"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 18; "Opcion" = "Activar Windows (Advertencia de Seguridad)"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 19; "Opcion" = "Generar Reporte de Seguridad (HTML)"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 20; "Opcion" = "Información del Usuario y Sistema"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 20; "Opcion" = "Informacion del Usuario y Sistema"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 21; "Opcion" = "Gestor de Direcciones MAC"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 22; "Opcion" = "Actualizar todas las aplicaciones (winget)"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 23; "Opcion" = "Verificación de Estado (ISO 27001 simplificado)"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 23; "Opcion" = "Verificacion de Estado (ISO 27001 simplificado)"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 0; "Opcion" = "Salir"; "Estado" = "N/A" }
     )
     
     $menuOptions | Format-Table -AutoSize
     
-    $selection = Read-Host "Ingrese el número de la opción que desea ejecutar"
+    $selection = Read-Host "Ingresa el numero de la opcion que deseas ejecutar"
     
     switch ($selection) {
         "1" {
             $rdpIn = Get-LastIncomingRDPLogon
             $rdpOut = Get-LastOutgoingRDPConnection
             Write-Host "`nEstado del servicio RDP: $(Get-RDPStatus)"
-            Write-Host "`nÚltima conexión RDP entrante:`n  - Fecha: $(if ($rdpIn) { $rdpIn.Fecha } else { 'N/A' })`n  - Usuario: $(if ($rdpIn) { $rdpIn.Usuario } else { 'N/A' })`n  - Origen: $(if ($rdpIn) { $rdpIn.Origen } else { 'N/A' })"
-            Write-Host "`nÚltima conexión RDP saliente:`n  - Host/IP: $(if ($rdpOut) { $rdpOut.Host } else { 'N/A' })`n  - Fecha: $(if ($rdpOut) { $rdpOut.Fecha } else { 'N/A' })"
+            Write-Host "`nUltima conexion RDP entrante:`n  - Fecha: $(if ($rdpIn) { $rdpIn.Fecha } else { 'N/A' })`n  - Usuario: $(if ($rdpIn) { $rdpIn.Usuario } else { 'N/A' })`n  - Origen: $(if ($rdpIn) { $rdpIn.Origen } else { 'N/A' })"
+            Write-Host "`nUltima conexion RDP saliente:`n  - Host/IP: $(if ($rdpOut) { $rdpOut.Host } else { 'N/A' })`n  - Fecha: $(if ($rdpOut) { $rdpOut.Fecha } else { 'N/A' })"
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "2" {
             Get-FirewallStatus
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "3" {
             Fix-FirewallPorts
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "4" {
             Manage-RDP
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "5" {
             Manage-WindowsTelemetry
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "6" {
             $tasks = Find-MaliciousScheduledTasks
@@ -1423,9 +1438,13 @@ function Show-MainMenu {
             } else {
             Write-Host "No se encontraron tareas programadas sospechosas." -ForegroundColor Green
             }
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "7" {
             Audit-NonEssentialServices
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "8" {
             $inactiveUsers = Find-InactiveUsers
@@ -1435,75 +1454,89 @@ function Show-MainMenu {
             } else {
                 Write-Host "No se encontraron cuentas de usuario inactivas." -ForegroundColor Green
             }
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "9" {
             Verify-FileSignatures
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "10" {
             $unsignedProcesses = Find-UnsignedProcesses
             if ($unsignedProcesses.Count -gt 0) {
-                Write-Host "Se encontraron procesos en ejecución sin firma digital:" -ForegroundColor Red
+                Write-Host "Se encontraron procesos en ejecucion sin firma digital:" -ForegroundColor Red
                 $unsignedProcesses | Format-Table -AutoSize
             } else {
                 Write-Host "No se encontraron procesos sin firma." -ForegroundColor Green
             }
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "11" {
             Stop-SuspiciousProcess
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "12" {
             Block-FileExecution
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "13" {
             Find-RegistryAutorun
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "14" {
             Analyze-NetworkConnections
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "15" {
             Write-Host "Copyright (c) 2023 h00kGh0st"
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "16" {
             Find-HiddenFilesAndScan
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "17" {
             Audit-FailedLogons
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "18" {
             Activate-Windows
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "19" {
             Generate-HTMLReport
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "20" {
-            $info = Get-UserInfo
-            Write-Host "`nInformación del Usuario y Sistema:" -ForegroundColor Yellow
-            Write-Host "  - Usuario actual: $($info.UsuarioActual)"
-            Write-Host "  - Nombre del equipo: $($info.NombreEquipo)"
-        
-            Write-Host "`nInformación de Administradores Locales:" -ForegroundColor Cyan
-            if ($info.AdministradoresLocales.Count -gt 0) {
-                $administrators = [string]::join(', ', $info.AdministradoresLocales)
-                Write-Host "  - Administradores locales: $administrators"
-            } else {
-                Write-Host "  - No se pudieron obtener los administradores locales." -ForegroundColor Red
-            }
-
-            Write-Host "`nInformación de Adaptadores de Red:" -ForegroundColor Cyan
-            if ($info.Redes.Count -gt 0) {
-                $info.Redes | Format-Table -AutoSize
-            } else {
-                Write-Host "  - No se encontraron adaptadores de red activos." -ForegroundColor Red
-            }
+            Get-UserInfo
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "21" {
             MacChangerMenu
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "22" {
             Update-AllWingetApps
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "23" {
             Check-ISO27001Status
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
         "0" {
             Clean-TempFolder
@@ -1512,13 +1545,9 @@ function Show-MainMenu {
         }
         default {
             Write-Host "Opción no válida. Por favor, intente de nuevo." -ForegroundColor Red
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
-    }
-    
-    # Pausa global para que el usuario pueda ver el resultado antes de que el menú se reinicie
-    if ($selection -ne "0" -and $selection -ne "7" -and $selection -ne "2" -and $selection -ne "13" -and $selection -ne "14" -and $selection -ne "11") {
-        Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
-        Read-Host | Out-Null
     }
 }
 # Iniciar el bucle del menú
@@ -1527,6 +1556,7 @@ while ($true) {
 }
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
