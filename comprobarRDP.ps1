@@ -5,7 +5,7 @@ $scriptUrl = "https://raw.githubusercontent.com/HooKgHosT/meditool/main/comproba
 $tempPath = Join-Path $env:TEMP "comprobarRDP.ps1"
 
 # Si el script aún no está ejecutándose desde TEMP → descargarlo y relanzar
-if (-not $MyInvocation.MyCommand.Path -or ($MyInvocation.MyCommand.Path -ne $tempPath)) {
+if (-not $MyInvocation.MyCommand.Path -or ($MyInvocation.MyInvocation.MyCommand.Path -ne $tempPath)) {
     try {
         # Intenta eliminar el archivo temporal si existe
         if (Test-Path $tempPath) {
@@ -91,7 +91,7 @@ function Get-LastOutgoingRDPConnection {
 }
 
 function Get-FirewallStatus {
-    Write-Host "`nAnalizando reglas de firewall. Esto puede tardar unos segundos..."
+    Write-Host "`nAnalizando reglas de firewall. Esto puede tardar unos segundos..." -ForegroundColor Yellow
     
     # Lista de nombres de programas comunes a excluir.
     $excludedPrograms = @(
@@ -134,7 +134,7 @@ function Fix-FirewallPorts {
             $rules | Remove-NetFirewallRule -Confirm:$false
             Write-Host "Puertos cerrados exitosamente." -ForegroundColor Green
         } else {
-Host "No se encontraron reglas de firewall inseguras que eliminar." -ForegroundColor Green
+            Write-Host "No se encontraron reglas de firewall inseguras que eliminar." -ForegroundColor Green
         }
     } catch {
         Write-Host "Error al intentar cerrar los puertos. Asegúrese de tener permisos de Administrador." -ForegroundColor Red
@@ -1113,54 +1113,56 @@ function Clean-TempFolder {
         Write-Host "Error al limpiar la carpeta TEMP. Algunos archivos pueden estar en uso." -ForegroundColor Red
     }
 }
-function Check-ISO {
-    Write-Host "======================================================== -ForegroundColor Cyan
-    Write-Host "==            Estado de Seguridad (ISO 27001)         == -ForegroundColor Cyan
-    Write-Host "======================================================== -ForegroundColor Cyan
+function Check-ISO27001Status {
+    Write-Host @"
+    ========================================================
+    ==            Estado de Seguridad (ISO 27001)         ==
+    ========================================================
+"@ -ForegroundColor Cyan
     
     $passed = $true
     
     # Control A.5.1.1: Políticas de seguridad
-    Write-Host "`nA.5.1.1 - Se ha detectado una política de contraseñas." -ForegroundColor Green
+    Write-Host "[✅] A.5.1.1 - Se ha detectado una política de contraseñas." -ForegroundColor Green
     
     # Control A.12.2.1: Controles contra el malware
-    Write-Host "`nVerificando el estado del antivirus..."
+    Write-Host "`n[🔍] Verificando el estado del antivirus..."
     try {
         $defenderStatus = Get-MpComputerStatus
         if ($defenderStatus.AntivirusEnabled -eq $true) {
-            Write-Host "A.12.2.1 - Windows Defender está activo y en ejecución." -ForegroundColor Green
+            Write-Host "[✅] A.12.2.1 - Windows Defender está activo y en ejecución." -ForegroundColor Green
         } else {
-            Write-Host "`nA.12.2.1 - Windows Defender está deshabilitado. Se recomienda activarlo." -ForegroundColor Red
+            Write-Host "[❌] A.12.2.1 - Windows Defender está deshabilitado. Se recomienda activarlo." -ForegroundColor Red
             $passed = $false
         }
     } catch {
-        Write-Host "`nA.12.2.1 - No se pudo verificar el estado del antivirus." -ForegroundColor Red
+        Write-Host "[❌] A.12.2.1 - No se pudo verificar el estado del antivirus." -ForegroundColor Red
         $passed = $false
     }
 
     # Control A.13.2.1: Procedimientos de inicio de sesión seguros
-    Write-Host "`nVerificando el servicio de RDP (Escritorio Remoto)..."
+    Write-Host "`n[🔍] Verificando el servicio de RDP (Escritorio Remoto)..."
     $rdpStatus = Get-ItemPropertyValue -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -ErrorAction SilentlyContinue
     if ($rdpStatus -eq 1) {
-        Write-Host "`nA.13.2.1 - El servicio RDP está deshabilitado." -ForegroundColor Green
+        Write-Host "[✅] A.13.2.1 - El servicio RDP está deshabilitado." -ForegroundColor Green
     } else {
-        Write-Host "`nA.13.2.1 - El servicio RDP está habilitado. Asegúrate de que sea necesario y esté protegido." -ForegroundColor Yellow
+        Write-Host "[⚠️] A.13.2.1 - El servicio RDP está habilitado. Asegúrate de que sea necesario y esté protegido." -ForegroundColor Yellow
     }
 
     # Control A.12.1.2: Gestión de cambios
-    Write-Host "`nVerificando actualizaciones de aplicaciones con winget..."
+    Write-Host "`n[🔍] Verificando actualizaciones de aplicaciones con winget..."
     try {
         $wingetResult = winget upgrade --all -q | Out-String
         if ($wingetResult -match "No se encontraron paquetes para actualizar.") {
-            Write-Host "A.12.1.2 - No hay actualizaciones pendientes para aplicaciones con winget." -ForegroundColor Green
+            Write-Host "[✅] A.12.1.2 - No hay actualizaciones pendientes para aplicaciones con winget." -ForegroundColor Green
         } else {
-            Write-Host "A.12.1.2 - Se encontraron actualizaciones pendientes. Se recomienda actualizarlas para mitigar vulnerabilidades." -ForegroundColor Yellow
+            Write-Host "[⚠️] A.12.1.2 - Se encontraron actualizaciones pendientes. Se recomienda actualizarlas para mitigar vulnerabilidades." -ForegroundColor Yellow
         }
     } catch {
-        Write-Host "A.12.1.2 - No se pudo verificar las actualizaciones con winget." -ForegroundColor Red
+        Write-Host "[❌] A.12.1.2 - No se pudo verificar las actualizaciones con winget." -ForegroundColor Red
     }
 
-    Write-Host "`nRecordatorio: Esta es una verificación simplificada de controles de ISO 27001." -ForegroundColor White
+    Write-Host "`n[💡] Recordatorio: Esta es una verificación simplificada de controles de ISO 27001." -ForegroundColor White
     Write-Host "Un análisis completo requiere una auditoría profesional de seguridad de la información." -ForegroundColor White
     Write-Host "========================================================" -ForegroundColor Cyan
 }
@@ -1304,7 +1306,7 @@ function Show-MainMenu {
             $info = Get-UserInfo
             Write-Host "`nInformacion del Usuario y Sistema:" -ForegroundColor Yellow
             Write-Host "  - Usuario actual: $($info.UsuarioActual)"
-            Write-Host "  - Nombre del equipo: $($info.NombreEquipo)"
+            Write-Host "  - - Nombre del equipo: $($info.NombreEquipo)"
             
             $administrators = if ($info.AdministradoresLocales.Count -gt 0) {
                 [string]::join(', ', $info.AdministradoresLocales)
@@ -1350,5 +1352,3 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
-
-
