@@ -969,6 +969,10 @@ while ($true) {
     Show-MainMenu
 }
 
+Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
+Read-Host | Out-Null
+
+
 
 
 
