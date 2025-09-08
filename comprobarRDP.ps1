@@ -965,24 +965,20 @@ function Audit-FailedLogons {
     Write-Host "`nAuditando inicios de sesion fallidos de las ultimas 24 horas..." -ForegroundColor Yellow
     $lastDay = (Get-Date).AddDays(-1)
     
-    try {
-        # Se obtiene el registro de eventos de forma segura, sin detener la ejecucion si no se encuentran eventos.
-        $failedLogons = Get-WinEvent -FilterHashtable { 
-            Logname = 'Security'; 
-            Id = 4625; 
-            StartTime = $lastDay 
-        } -ErrorAction SilentlyContinue | Select-Object TimeCreated, @{ Name = 'Usuario'; Expression = { $_.Properties[5].Value } }, @{ Name = 'Origen'; Expression = { $_.Properties[18].Value } }
-        
-        if ($failedLogons.Count -gt 0) {
-            Write-Host "Se encontraron los siguientes intentos de inicio de sesion fallidos:" -ForegroundColor Red
-            $failedLogons | Format-Table -AutoSize
-        } else {
-            Write-Host "No se encontraron intentos de inicio de sesion fallidos en las ultimas 24 horas." -ForegroundColor Green
-        }
-        
-    } catch {
-        Write-Host "Error al acceder al registro de eventos. Verifique que su cuenta tiene los privilegios de seguridad necesarios." -ForegroundColor Red
-        Write-Host "Detalles del error: $($_.Exception.Message)" -ForegroundColor Red
+    # Se obtiene el registro de eventos de forma segura.
+    # El parametro -ErrorAction SilentlyContinue evita que el script se detenga
+    # si no se encuentran eventos, lo que resuelve el error.
+    $failedLogons = Get-WinEvent -FilterHashtable @{ 
+        Logname = 'Security'; 
+        Id = 4625; 
+        StartTime = $lastDay 
+    } -ErrorAction SilentlyContinue | Select-Object TimeCreated, @{ Name = 'Usuario'; Expression = { $_.Properties[5].Value } }, @{ Name = 'Origen'; Expression = { $_.Properties[18].Value } }
+    
+    if ($failedLogons.Count -gt 0) {
+        Write-Host "Se encontraron los siguientes intentos de inicio de sesion fallidos:" -ForegroundColor Red
+        $failedLogons | Format-Table -AutoSize
+    } else {
+        Write-Host "No se encontraron intentos de inicio de sesion fallidos en las ultimas 24 horas." -ForegroundColor Green
     }
 }
 
@@ -1550,6 +1546,7 @@ while ($true) {
 }
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
