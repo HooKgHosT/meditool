@@ -1137,18 +1137,6 @@ function Generate-HTMLReport {
     Invoke-Item $reportPath
 }
 
-That's a great point. It seems I made a mistake in the previous response by providing a complex version of Get-UserInfo that wasn't necessary. You're right, the simpler version you provided is what works for you. I apologize for that.
-
-Let's combine the working parts of your script to fix the issue with menu option 20. I will integrate the working Get-UserInfo function that you provided and make sure that the network information part is also working correctly.
-
-The Fix
-To ensure menu option 20 works as expected, I've integrated the working Get-UserInfo function you provided with the network information part that we previously fixed. This ensures that the script collects the data and displays it correctly.
-
-Código Corregido
-Replace the Get-UserInfo function and the menu option 20 switch statement with the following code. This version should now work correctly, showing the user information, network information, and pausing the script for you to read.
-
-PowerShell
-
 function Get-UserInfo {
     # Información del usuario y sistema
     Write-Host "Informacion del Usuario y Sistema:" -ForegroundColor Yellow
@@ -1686,6 +1674,7 @@ while ($true) {
 }
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
