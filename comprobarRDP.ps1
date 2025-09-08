@@ -769,15 +769,15 @@ function Analyze-NetworkConnections {
                     Write-Host "  - Subred: $($ipAddress.PrefixLength) bits" -ForegroundColor White
                 } else {
                     Write-Host "  - Direccion IP: No disponible" -ForegroundColor Red
+                    Write-Host "  - Subred: No disponible" -ForegroundColor Red
                 }
                 
                 Write-Host "  - Tipo de Adaptador: $($adapter.InterfaceDescription)" -ForegroundColor White
 
                 if ($gateway) {
-                    $macAddr = (Get-Neighbor -IPAddress $gateway.NextHop -ErrorAction SilentlyContinue).LinkLayerAddress
-                    Write-Host "  - MAC de Puerta de Enlace: $(if ($macAddr) { $macAddr } else { 'No disponible' })" -ForegroundColor White
+                    Write-Host "  - IP de Puerta de Enlace: $($gateway.NextHop)" -ForegroundColor White
                 } else {
-                    Write-Host "  - MAC de Puerta de Enlace: No disponible" -ForegroundColor Red
+                    Write-Host "  - IP de Puerta de Enlace: No disponible" -ForegroundColor Red
                 }
 
                 if ($dns) {
@@ -1550,6 +1550,7 @@ while ($true) {
 }
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
