@@ -373,7 +373,13 @@ function Analyze-PasswordPolicy {
     $infPath = "$env:TEMP\temp_sec_policy.inf"
     
     try {
-        secedit /export /cfg $infPath -ErrorAction Stop
+        # Check if the SDB file exists, create it if not.
+        if (-not (Test-Path $sdbPath)) {
+            secedit /configure /db $sdbPath /cfg "C:\Windows\inf\defltbase.inf" /quiet -ErrorAction SilentlyContinue
+        }
+
+        # Explicitly export the policy to the specified INF file path.
+        secedit /export /cfg $infPath /log "$env:TEMP\secedit.log" -ErrorAction Stop
         
         $passwordPolicy = Get-Content $infPath | Where-Object { 
             $_ -like "MinimumPasswordLength*" -or
@@ -409,6 +415,7 @@ function Analyze-PasswordPolicy {
     } finally {
         # Limpiar los archivos temporales
         if (Test-Path $infPath) { Remove-Item $infPath -Force -ErrorAction SilentlyContinue }
+        if (Test-Path $sdbPath) { Remove-Item $sdbPath -Force -ErrorAction SilentlyContinue }
     }
 }
 
@@ -1493,6 +1500,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
