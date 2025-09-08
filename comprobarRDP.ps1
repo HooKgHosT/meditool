@@ -1347,6 +1347,100 @@ function Check-ISO27001Status {
     Write-Host "========================================================" -ForegroundColor Cyan
 }
 
+function Clean-SystemJunk {
+    Write-Host "`nLimpiando archivos temporales y caches del sistema..." -ForegroundColor Yellow
+    
+    $tempFolders = @(
+        "$env:TEMP",
+        "$env:SystemRoot\Temp",
+        "$env:USERPROFILE\AppData\Local\Microsoft\Windows\INetCache"
+    )
+    
+    # Se crea un filtro para proteger el script que se esta ejecutando
+    $scriptFileName = Split-Path -Path $MyInvocation.MyCommand.Path -Leaf
+    
+    foreach ($folder in $tempFolders) {
+        if (Test-Path -Path $folder) {
+            Write-Host "Limpiando $folder..." -ForegroundColor Yellow
+            
+            # Obtener archivos y carpetas, excluyendo el script en uso
+            $items = Get-ChildItem -Path $folder -Recurse -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne $scriptFileName }
+            
+            foreach ($item in $items) {
+                try {
+                    Remove-Item -Path $item.FullName -Recurse -Force -ErrorAction Stop
+                } catch {
+                    # Si el archivo esta en uso, se notifica al usuario
+                    Write-Host "Advertencia: No se pudo eliminar $($item.FullName). El archivo esta en uso." -ForegroundColor Red
+                    
+                    # Intentar encontrar el proceso que lo usa
+                    try {
+                        $pids = Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Modules.FileName -like "$($item.FullName)*" }
+                        if ($pids) {
+                            $pid = $pids.Id[0]
+                            $processName = $pids.ProcessName[0]
+                            Write-Host "El archivo esta siendo usado por el proceso: '$processName' (PID: $pid)." -ForegroundColor Yellow
+                            
+                            Write-Host "¿Desea cerrar este proceso para eliminar el archivo? (S/N/Omitir)" -ForegroundColor Cyan
+                            $userChoice = Read-Host
+                            if ($userChoice -eq "S" -or $userChoice -eq "s") {
+                                Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                                Write-Host "Proceso cerrado. Intentando eliminar de nuevo..." -ForegroundColor Green
+                                Remove-Item -Path $item.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                            }
+                        }
+                    } catch {
+                        # No hacer nada si no se puede encontrar el PID
+                    }
+                }
+            }
+        }
+    }
+    
+    Write-Host "`nLimpieza de carpetas temporales completada." -ForegroundColor Green
+}
+
+function Find-OrphanedAndZeroByteFiles {
+    Write-Host "`nBuscando archivos de 0 bytes en ubicaciones comunes..." -ForegroundColor Yellow
+    $suspiciousPaths = @(
+        "$env:USERPROFILE",
+        "C:\ProgramData"
+    )
+
+    $foundFiles = @()
+
+    foreach ($path in $suspiciousPaths) {
+        Write-Host "Analizando ruta: $path"
+        try {
+            # Busqueda de archivos de 0 bytes
+            $foundFiles += Get-ChildItem -Path $path -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Length -eq 0 }
+            
+        } catch {
+            Write-Host "Advertencia: No se pudo acceder a la ruta '$path' debido a permisos." -ForegroundColor Gray
+        }
+    }
+
+    if ($foundFiles.Count -gt 0) {
+        Write-Host "`nSe encontraron los siguientes archivos de 0 bytes. Se recomienda su revision:" -ForegroundColor Red
+        $foundFiles | Select-Object Name, Directory, LastWriteTime | Format-Table -AutoSize
+        
+        Write-Host "`n¿Deseas eliminar estos archivos? (S/N)"
+        $choice = Read-Host
+        if ($choice -eq "S" -or $choice -eq "s") {
+            try {
+                $foundFiles | Remove-Item -Force -ErrorAction SilentlyContinue
+                Write-Host "Archivos eliminados exitosamente." -ForegroundColor Green
+            } catch {
+                Write-Host "Error al eliminar los archivos. Es posible que esten en uso." -ForegroundColor Red
+            }
+        } else {
+            Write-Host "Operacion cancelada." -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "No se encontraron archivos de 0 bytes." -ForegroundColor Green
+    }
+}
+
 # --- MENÚ PRINCIPAL ---
 function Show-MainMenu {
     Clear-Host
@@ -1383,6 +1477,8 @@ function Show-MainMenu {
         [PSCustomObject]@{ "ID" = 21; "Opcion" = "Gestor de Direcciones MAC"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 22; "Opcion" = "Actualizar todas las aplicaciones (winget)"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 23; "Opcion" = "Verificacion de Estado (ISO 27001 simplificado)"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 24; "Opcion" = "Limpiar Archivos Temporales del Sistema"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 25; "Opcion" = "Buscar Archivos de 0 Bytes"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 0; "Opcion" = "Salir"; "Estado" = "N/A" }
     )
     
@@ -1528,6 +1624,16 @@ function Show-MainMenu {
             Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
             Read-Host | Out-Null
         }
+        "24" {
+            Clean-SystemJunk
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
+        }
+        "25" {
+            Find-OrphanedAndZeroByteFiles
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
+        }
         "0" {
             Clean-TempFolder
             Write-Host "Saliendo del programa. ¡Adiós!" -ForegroundColor Green
@@ -1546,6 +1652,7 @@ while ($true) {
 }
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
