@@ -371,43 +371,53 @@ function Analyze-PasswordPolicy {
     # Usar secedit para obtener la politica de cuentas locales (metodo definitivo)
     $infPath = "$env:TEMP\temp_sec_policy.inf"
     
+    # Guardar el directorio de trabajo actual y cambiarlo a la ruta temporal
+    $originalPath = Get-Location
+    Set-Location -Path $env:TEMP
+    
     try {
-        # Exportar solo la politica de seguridad al archivo INF
+        # Exportar solo la politica de seguridad al archivo INF en el directorio temporal
         secedit /export /cfg $infPath /areas SECURITYPOLICY -ErrorAction Stop
         
-        $passwordPolicy = Get-Content $infPath | Where-Object { 
-            $_ -like "MinimumPasswordLength*" -or
-            $_ -like "PasswordComplexity*" -or
-            $_ -like "PasswordHistorySize*" -or
-            $_ -like "MaximumPasswordAge*"
-        }
-        
-        $resultsTable = @()
-        $foundData = $false
-
-        if ($passwordPolicy) {
-            $foundData = $true
-            $minLen = ($passwordPolicy | Where-Object { $_ -like "*MinimumPasswordLength*" }).Split('=')[1].Trim()
-            $complexity = ($passwordPolicy | Where-Object { $_ -like "*PasswordComplexity*" }).Split('=')[1].Trim()
-            $history = ($passwordPolicy | Where-Object { $_ -like "*PasswordHistorySize*" }).Split('=')[1].Trim()
-            $maxAge = ($passwordPolicy | Where-Object { $_ -like "*MaximumPasswordAge*" }).Split('=')[1].Trim()
+        # Verificar si el archivo se creo y tiene contenido
+        if (Test-Path $infPath -and (Get-Content $infPath)) {
+            $passwordPolicy = Get-Content $infPath | Where-Object { 
+                $_ -like "MinimumPasswordLength*" -or
+                $_ -like "PasswordComplexity*" -or
+                $_ -like "PasswordHistorySize*" -or
+                $_ -like "MaximumPasswordAge*"
+            }
             
-            $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Longitud Minima"; "Valor" = $minLen }
-            $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Complejidad"; "Valor" = if ($complexity -eq "1") { "Habilitada" } else { "Deshabilitada" } }
-            $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Historial"; "Valor" = $history }
-            $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Antiguedad Maxima (dias)"; "Valor" = [math]::Floor($maxAge / 86400) } # Convertir segundos a dias
-        }
-        
-        if ($foundData) {
-            $resultsTable | Format-Table -AutoSize
+            $resultsTable = @()
+            $foundData = $false
+
+            if ($passwordPolicy) {
+                $foundData = $true
+                $minLen = ($passwordPolicy | Where-Object { $_ -like "*MinimumPasswordLength*" }).Split('=')[1].Trim()
+                $complexity = ($passwordPolicy | Where-Object { $_ -like "*PasswordComplexity*" }).Split('=')[1].Trim()
+                $history = ($passwordPolicy | Where-Object { $_ -like "*PasswordHistorySize*" }).Split('=')[1].Trim()
+                $maxAge = ($passwordPolicy | Where-Object { $_ -like "*MaximumPasswordAge*" }).Split('=')[1].Trim()
+                
+                $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Longitud Minima"; "Valor" = $minLen }
+                $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Complejidad"; "Valor" = if ($complexity -eq "1") { "Habilitada" } else { "Deshabilitada" } }
+                $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Historial"; "Valor" = $history }
+                $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Antiguedad Maxima (dias)"; "Valor" = [math]::Floor($maxAge / 86400) } # Convertir segundos a dias
+            }
+            
+            if ($foundData) {
+                $resultsTable | Format-Table -AutoSize
+            } else {
+                Write-Host "La informacion de politica de contrasenas no esta disponible." -ForegroundColor Red
+            }
         } else {
-            Write-Host "La informacion de politica de contrasenas no esta disponible." -ForegroundColor Red
+            Write-Host "El archivo de politica de seguridad no fue creado o esta vacio." -ForegroundColor Red
         }
 
     } catch {
         Write-Host "Error al usar secedit. Asegurese de que se esta ejecutando con privilegios de Administrador." -ForegroundColor Red
     } finally {
-        # Limpiar los archivos temporales
+        # Volver al directorio de trabajo original y limpiar los archivos temporales
+        Set-Location -Path $originalPath
         if (Test-Path $infPath) { Remove-Item $infPath -Force -ErrorAction SilentlyContinue }
     }
 }
@@ -1493,6 +1503,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
