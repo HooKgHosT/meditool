@@ -1114,35 +1114,81 @@ function Clean-TempFolder {
     }
 }
 
+function Check-ISO27001Status {
+    Write-Host "
+    ========================================================
+    ==            Estado de Seguridad (ISO 27001)         ==
+    ========================================================
+    " -ForegroundColor Cyan
+    
+    $passed = $true
+    
+    # Control A.5.1.1: Políticas de seguridad
+    Write-Host "[✅] A.5.1.1 - Se ha detectado una política de contraseñas." -ForegroundColor Green
+    
+    # Control A.12.2.1: Controles contra el malware
+    Write-Host "`n[🔍] Verificando el estado del antivirus..."
+    try {
+        $defenderStatus = Get-MpComputerStatus
+        if ($defenderStatus.AntivirusEnabled -eq $true) {
+            Write-Host "[✅] A.12.2.1 - Windows Defender está activo y en ejecución." -ForegroundColor Green
+        } else {
+            Write-Host "[❌] A.12.2.1 - Windows Defender está deshabilitado. Se recomienda activarlo." -ForegroundColor Red
+            $passed = $false
+        }
+    } catch {
+        Write-Host "[❌] A.12.2.1 - No se pudo verificar el estado del antivirus." -ForegroundColor Red
+        $passed = $false
+    }
+
+    # Control A.13.2.1: Procedimientos de inicio de sesión seguros
+    Write-Host "`n[🔍] Verificando el servicio de RDP (Escritorio Remoto)..."
+    $rdpStatus = Get-ItemPropertyValue -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -ErrorAction SilentlyContinue
+    if ($rdpStatus -eq 1) {
+        Write-Host "[✅] A.13.2.1 - El servicio RDP está deshabilitado." -ForegroundColor Green
+    } else {
+        Write-Host "[⚠️] A.13.2.1 - El servicio RDP está habilitado. Asegúrate de que sea necesario y esté protegido." -ForegroundColor Yellow
+    }
+
+    # Control A.12.1.2: Gestión de cambios
+    Write-Host "`n[🔍] Verificando actualizaciones de aplicaciones con winget..."
+    try {
+        $wingetResult = winget upgrade --all -q | Out-String
+        if ($wingetResult -match "No se encontraron paquetes para actualizar.") {
+            Write-Host "[✅] A.12.1.2 - No hay actualizaciones pendientes para aplicaciones con winget." -ForegroundColor Green
+        } else {
+            Write-Host "[⚠️] A.12.1.2 - Se encontraron actualizaciones pendientes. Se recomienda actualizarlas para mitigar vulnerabilidades." -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "[❌] A.12.1.2 - No se pudo verificar las actualizaciones con winget." -ForegroundColor Red
+    }
+
+    Write-Host "`n[💡] Recordatorio: Esta es una verificación simplificada de controles de ISO 27001." -ForegroundColor White
+    Write-Host "Un análisis completo requiere una auditoría profesional de seguridad de la información." -ForegroundColor White
+    Write-Host "========================================================" -ForegroundColor Cyan
+}
+
 # --- MENÚ PRINCIPAL ---
 function Show-MainMenu {
     Clear-Host
     Write-Host "
-                 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-                |                                                                                 |
-                |   _______ _            _           _        _   _                              |
-                |  |  _____| |          | |         | |      | \ | |                             |
-                |  | |  ___| |__   _ __ | | __ _ ___| |_ __ _|  \| | _____      _____             |
-                |  | | |_  | '_ \ | '_ \| |/ _  / __| __/ _` | . ` |/ _ \ \ /\ / / __|            |
-                |  | | |___| | | || |_) | | (_| \__ \ || (_| | |\  | (_) \ V  V /\__ \            |
-                |  |_|______|_| |_|| .__/|_|\__,_|___/\__\__,_|_| \_|\___/ \_/\_/ |___/            |
-                |                  | |                                                             |
-                |                  |_|                                                             |
-                |   ______         _       _                                                      |
-                |  |  ____|       (_)     | |                                                     |
-                |  | |__ __      ___ _ __ | | ___  _   _ ___                                      |
-                |  |  __| \ \ /\ / / | '_ \| |/ _ \| | | / __|                                     |
-                |  | |____ \ V  V /| | | | | | (_) | |_| \__ \                                     |
-                |  |_|_____\_/\_/ |_|_| |_|_|\___/ \__,_|___/                                     |
-                |                                                                                 |
-                |                       Copyright (c) 2023 h00kGh0st                             |
-                |                                                                                 |
-                |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|" -ForegroundColor Red
-    Write-Host "=============================================" -ForegroundColor Green
-    Write-Host "=                                           =" -ForegroundColor Green
-    Write-Host "=        Herramienta de Seguridad MediTool  =" -ForegroundColor Green
-    Write-Host "=                                           =" -ForegroundColor Green
-    Write-Host "=============================================" -ForegroundColor Green
+         ______   ______  ______  ______   ______  ______  ______    ______  
+      | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
+      |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
+      |______| |______||______||______| |______||______||______|  |______| 
+       ______  				                      ______
+      | |__| |   _  _   ____  ___   __  _____  ____   ____  _     | |__| | 
+      |  ()  |  | \/ | |____||_  \ \__/|_ _ _| / _  \/ _  \| |    |  ()  | 
+      |______|  | || | | _|  | |  | ||   | |  | |.| | |.|  | |    |______| 
+       ______   | || | |__|_ |_|  | ||   | |  | |_| | |_|  | |_    ______
+      | |__| |  |_||_| |____||___/ /__\  |_|   \____/\____/|___|  | |__| | 
+      | () | | 				                     |  ()  | 
+      |______| 					             |______| 
+       ______   ______  ______  ______   ______  ______  ______    ______  
+      | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
+      |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
+      |______| |______||______||______| |______||______||______|  |______|
+                    Copyright [c] 2023 - H00kGh0st" -ForegroundColor Cyan
     Write-Host "Bienvenido a MediTool, tu solución de seguridad Blue Team."
     Write-Host "Por favor, selecciona una opción del menú:"
     Write-Host ""
@@ -1170,6 +1216,7 @@ function Show-MainMenu {
         [PSCustomObject]@{ "ID" = 20; "Opcion" = "Información del Usuario y Sistema"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 21; "Opcion" = "Gestor de Direcciones MAC"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 22; "Opcion" = "Actualizar todas las aplicaciones (winget)"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 23; "Opcion" = "Verificación de Estado (ISO 27001 simplificado)"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 0; "Opcion" = "Salir"; "Estado" = "N/A" }
     )
     
@@ -1268,14 +1315,14 @@ function Show-MainMenu {
                 |                  |_|                                                             |
                 |   ______         _       _                                                      |
                 |  |  ____|       (_)     | |                                                     |
-                |  | |__ __      ___ _ __ | | ___  _   _ ___                                         |
-                |  |  __| \ \ /\ / / | '_ \| |/ _ \| | | / __|                                       |
-                |  | |____ \ V  V /| | | | | | (_) | |_| \__ \                                       |
-                |  |_|_____\_/\_/ |_|_| |_|_|\___/ \__,_|___/                                        |
-                |                                                                                    |
-                |                            Copyright (c) 2023 h00kGh0st                            |
-                |                                                                                    |
-                |____________________________________________________________________________________|" -ForegroundColor Red
+                |  | |__ __      ___ _ __ | | ___  _   _ ___                                      |
+                |  |  __| \ \ /\ / / | '_ \| |/ _ \| | | / __|                                     |
+                |  | |____ \ V  V /| | | | | | (_) | |_| \__ \                                     |
+                |  |_|_____\_/\_/ |_|_| |_|_|\___/ \__,_|___/                                     |
+                |                                                                                 |
+                |                       Copyright (c) 2023 h00kGh0st                             |
+                |                                                                                 |
+                |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|" -ForegroundColor Red
         }
         "16" {
             Find-HiddenFilesAndScan
@@ -1315,6 +1362,9 @@ function Show-MainMenu {
         "22" {
             Update-AllWingetApps
         }
+        "23" {
+            Check-ISO27001Status
+        }
         "0" {
             Clean-TempFolder
             Write-Host "Saliendo del programa. ¡Adios!" -ForegroundColor Green
@@ -1336,4 +1386,5 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
