@@ -1122,6 +1122,18 @@ function Update-AllWingetApps {
     }
 }
 
+function Clean-TempFolder {
+    Write-Host "`nLimpiando el contenido de la carpeta TEMP..." -ForegroundColor Yellow
+    try {
+        # Obtenemos todos los archivos y carpetas dentro de la carpeta TEMP
+        # y los eliminamos. El parametro -Force es para forzar la eliminacion de archivos ocultos o de solo lectura
+        Get-ChildItem -Path $env:TEMP -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "Contenido de la carpeta TEMP eliminado exitosamente." -ForegroundColor Green
+    } catch {
+        Write-Host "Error al limpiar la carpeta TEMP. Algunos archivos pueden estar en uso." -ForegroundColor Red
+    }
+}
+
 # --- MENÚ PRINCIPAL ---
 function Show-MainMenu {
     Clear-Host
@@ -1316,6 +1328,8 @@ Write-Host "
             Update-AllWingetApps
         }
         "0" {
+            Clean-TempFolder # Llamada a la funcion de limpieza
+            Write-Host "Saliendo del programa. ¡Adios!" -ForegroundColor Green
             exit
         }
         default {
@@ -1326,4 +1340,5 @@ Write-Host "
     Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
     Read-Host | Out-Null
 }
+
 
