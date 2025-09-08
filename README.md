@@ -1,10 +1,10 @@
 <p align="center">MediTool: Herramienta de Seguridad para Blue Team</p>
 
 MediTool es un script de PowerShell diseñado para equipos de seguridad (Blue Team) y usuarios avanzados. Proporciona una suite de herramientas para auditar, verificar y mitigar vulnerabilidades comunes en sistemas Windows 10 y Windows 11.
-
 El script se auto-gestiona: se descarga, no se eleva a permisos de administrador hay que ejecutar el powershell como administrador y luego lanzar el comando posteriormente, una vez utilizado, se borra para no dejar rastros en el sistema.
 
 :rocket: Características :rocket:
+
 Verificación de Seguridad: Audita puertos abiertos, telemetría de Windows, y el estado del servicio de Escritorio Remoto (RDP).
 Análisis de Archivos y Procesos: Busca archivos y procesos en ejecución sin firma digital, lo que puede indicar la presencia de malware.
 Gestión de Cuentas de Usuario: Identifica usuarios inactivos y analiza la política de contraseñas.
@@ -12,10 +12,12 @@ Análisis de Red y Registro: Examina conexiones de red sospechosas y entradas de
 Reportes de Seguridad: Genera un reporte detallado en formato HTML para una revisión más sencilla.
 Utilitarios Adicionales: Incluye herramientas para cambiar la dirección MAC, actualizar aplicaciones con winget, limpiar archivos temporales y activar Windows de forma no oficial.
 
-:card_file_box: Archivo del Código
+:card_file_box: Archivo del Código:
+
 meditool.ps1: El script principal de la herramienta.
 
 :gear: Cómo usarlo :gear:
+
 Para ejecutar MediTool, simplemente abre una terminal de PowerShell como Administrador y ejecuta el siguiente comando:
 
 Importante: Es recomendable ejecutar la terminal directamente con privilegios elevados para evitar errores de ejecución..
@@ -31,9 +33,11 @@ Al ejecutarlo, el script se descargará temporalmente, se relanzará con permiso
 
 
 :page_with_curl: Licencia :page_with_curl:
+
 Este proyecto está bajo la licencia MIT. Puedes ver el archivo LICENSE para más detalles.
 
-:busts_in_silhouette: Contacto :busts_in_silhouette:
+<p align="center">:busts_in_silhouette: Contacto :busts_in_silhouette: </p>
+
 Para sugerencias, reportes de errores o si quieres contribuir, puedes contactarme a través de:
 
 GitHub: @HooKgHosT
