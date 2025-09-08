@@ -3,7 +3,6 @@
 # --- AUTODESCARGA Y RELANZAMIENTO ---
 $scriptUrl = "https://raw.githubusercontent.com/HooKgHosT/meditool/main/comprobarRDP.ps1"
 $tempPath  = Join-Path $env:TEMP "comprobarRDP.ps1"
-$OutputEncoding = [System.Text.UTF8Encoding]::new()
 
 # Si el script aún no está ejecutándose desde TEMP → descargarlo y relanzar
 if (-not $MyInvocation.MyCommand.Path -or ($MyInvocation.MyCommand.Path -ne $tempPath)) {
@@ -21,28 +20,28 @@ if (-not $MyInvocation.MyCommand.Path -or ($MyInvocation.MyCommand.Path -ne $tem
 }
 
 
-# DIBUJO DE JERINGA ASCII HORIZONTAL
 Write-Host "
-%     ______   ______  ______  ______   ______  ______  ______    ______  
+%	  ______   ______  ______  ______   ______  ______  ______    ______  
 %	 | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
 % 	 |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
 % 	 |______| |______||______||______| |______||______||______|  |______| 
-% 	  ______  						                              ______
+% 	  ______  				                      ______
 % 	 | |__| |   _  _   ____  ___   __  _____  ____   ____  _     | |__| | 
 % 	 |  ()  |  | \/ | |____||_  \ \__/|_ _ _| / _  \/ _  \| |    |  ()  | 
 % 	 |______|  | || | | _|  | |  | ||   | |  | |.| | |.|  | |    |______| 
 % 	  ______   | || | |__|_ |_|  | ||   | |  | |_| | |_|  | |_    ______
 % 	 | |__| |  |_||_| |____||___/ /__\  |_|   \____/\____/|___|  | |__| | 
-% 	 | () | | 						                             |  ()  | 
-% 	 |______| 						                             |______| 
+% 	 | () | |			                             |  ()  | 
+% 	 |______|			                             |______| 
 % 	  ______   ______  ______  ______   ______  ______  ______    ______  
 % 	 | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
 % 	 |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
 % 	 |______| |______||______||______| |______||______||______|  |______|
 " -ForegroundColor Cyan
-
 # Variables globales para el MAC Changer
 $global:AdapterName = $null
+# Cambiar la codificación para que se muestren las tildes y la ñ correctamente
+$OutputEncoding = [System.Text.UTF8Encoding]::new()
 
 # --- Funciones de seguridad ---
 
@@ -105,9 +104,34 @@ function Get-LastOutgoingRDPConnection {
 }
 
 function Get-FirewallStatus {
+    Write-Host "`nAnalizando reglas de firewall. Esto puede tardar unos segundos..." -ForegroundColor Yellow
+    
+    # Lista de nombres de programas comunes a excluir.
+    $excludedPrograms = @(
+        "*chrome.exe*", "*firefox.exe*", "*msedge.exe*",
+        "*steam.exe*", "*steamwebhelper.exe*", "*Discord.exe*", 
+        "*EpicGamesLauncher.exe*", "*UnrealEngine.exe*", "*zoom.exe*",
+        "*RiotClientServices.exe*", "*RiotClient.exe*", "*RiotVanguard.exe*", "*LeagueClient.exe*", "*LeagueClientUx.exe*", "*VALORANT.exe*"
+    )
+
     try {
-        $rules = Get-NetFirewallRule | Where-Object { $_.Enabled -eq "True" -and ($_.Direction -eq "Inbound" -or $_.Direction -eq "Both") -and ($_.Action -eq "Allow" -or $_.Action -eq "AllowInbound") }
-        return $rules | Select-Object DisplayName, Direction, Action, Profile, Protocol, LocalPort
+        $allRules = Get-NetFirewallRule | Where-Object { 
+            $_.Enabled -eq "True" -and ($_.Direction -eq "Inbound" -or $_.Direction -eq "Both") -and ($_.Action -eq "Allow" -or $_.Action -eq "AllowInbound") 
+        }
+
+        $filteredRules = $allRules | Where-Object {
+            $programName = $_.ProgramName.ToLower()
+            $isExcluded = $false
+            foreach ($excluded in $excludedPrograms) {
+                if ($programName -like $excluded) {
+                    $isExcluded = $true
+                    break
+                }
+            }
+            -not $isExcluded
+        }
+        
+        return $filteredRules | Select-Object DisplayName, Direction, Action, Profile, Protocol, LocalPort
     } catch {
         Write-Host "Error al obtener las reglas del Firewall. Asegúrese de tener permisos de Administrador." -ForegroundColor Red
         return $null
@@ -131,21 +155,24 @@ function Fix-FirewallPorts {
 }
 
 function Manage-RDP {
-    Write-Host "Estado actual del RDP: $((Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections").fDenyTSConnections)"
+    Write-Host "`n Estado actual del RDP: $((Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections").fDenyTSConnections)"
     Write-Host ""
     Write-Host "1. Habilitar RDP"
     Write-Host "2. Deshabilitar RDP"
-    $rdpOption = Read-Host "Seleccione una opción"
+    Write-Host "0. Volver al menú principal`n"
+    $rdpOption = Read-Host "Seleccione una opcion: "
     
     try {
         if ($rdpOption -eq "1") {
             Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
-            Write-Host "RDP habilitado." -ForegroundColor Green
+            Write-Host "RDP habilitado.`n" -ForegroundColor Green
         } elseif ($rdpOption -eq "2") {
             Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 1
-            Write-Host "RDP deshabilitado." -ForegroundColor Yellow
+            Write-Host "RDP deshabilitado.`n" -ForegroundColor Yellow
+        } elseif ($rdpOption -eq "0") {
+            # Quita la llamada a Show-MainMenu aquí. El bucle principal se encargará de esto.
         } else {
-            Write-Host "Opción no válida." -ForegroundColor Red
+            Write-Host "Opcion no valida." -ForegroundColor Red
         }
     } catch {
         Write-Host "Error al cambiar el estado del RDP. Asegúrese de tener permisos de Administrador." -ForegroundColor Red
@@ -157,7 +184,7 @@ function Get-TelemetryStatus {
         $regValue = Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'AllowTelemetry' -ErrorAction SilentlyContinue
         
         if ($null -eq $regValue) {
-            return "No configurada/Deshabilitada"
+            return "`n No configurada/Deshabilitada"
         }
         
         if ($regValue -eq 0) {
@@ -176,15 +203,16 @@ function Manage-WindowsTelemetry {
 
     try {
         $regValue = Get-ItemPropertyValue -Path $regPath -Name $regProperty -ErrorAction Stop
-        Write-Host "Estado actual de la telemetría de Windows: $regValue"
+        Write-Host "`nEstado actual de la telemetria de Windows: $regValue"
     } catch {
-        Write-Host "Estado actual de la telemetría de Windows: No configurada"
+        Write-Host "`nEstado actual de la telemetria de Windows: No configurada"
     }
     
     Write-Host ""
-    Write-Host "1. Habilitar Telemetría"
-    Write-Host "2. Deshabilitar Telemetría"
-    $telemetryOption = Read-Host "Seleccione una opción"
+    Write-Host "1. Habilitar Telemetria"
+    Write-Host "2. Deshabilitar Telemetria"
+    Write-Host "0. Volver al menu principal"
+    $telemetryOption = Read-Host "`nSeleccione una opcion"
     
     try {
         if (-not (Test-Path -Path $regPath)) {
@@ -193,12 +221,14 @@ function Manage-WindowsTelemetry {
 
         if ($telemetryOption -eq "1") {
             Set-ItemProperty -Path $regPath -Name $regProperty -Value 1 -Type DWORD -Force
-            Write-Host "Telemetría habilitada." -ForegroundColor Green
+            Write-Host "`nTelemetria habilitada." -ForegroundColor Green
         } elseif ($telemetryOption -eq "2") {
             Set-ItemProperty -Path $regPath -Name $regProperty -Value 0 -Type DWORD -Force
-            Write-Host "Telemetría deshabilitada." -ForegroundColor Yellow
+            Write-Host "`nTelemetria deshabilitada." -ForegroundColor Yellow
+        } elseif ($telemetryOption -eq "0") {
+            # Quita la llamada a Show-MainMenu aquí. El bucle principal se encargará de esto.
         } else {
-            Write-Host "Opción no válida." -ForegroundColor Red
+            Write-Host "Opcion no válida." -ForegroundColor Red
         }
     } catch {
         Write-Host "Error al cambiar el estado de la telemetría. Asegúrese de tener permisos de Administrador." -ForegroundColor Red
@@ -206,7 +236,7 @@ function Manage-WindowsTelemetry {
 }
 
 function Find-MaliciousScheduledTasks {
-    Write-Host "Buscando tareas programadas con alto riesgo..." -ForegroundColor Yellow
+    Write-Host "`nBuscando tareas programadas con alto riesgo..." -ForegroundColor Yellow
     try {
         $tasks = Get-ScheduledTask | Where-Object { $_.State -ne "Disabled" -and $_.TaskPath -notlike "\Microsoft\Windows\*" -and $_.TaskPath -notlike "\Microsoft\Office\*" }
         $suspiciousTasks = @()
@@ -224,34 +254,35 @@ function Find-MaliciousScheduledTasks {
 }
 
 function Analyze-PasswordPolicy {
+    Write-Host ""
     $output = net accounts 2>$null
 
     $results = @()
     $policy = @{
-        "Longitud Mínima" = "N/A"
+        "Longitud Minima" = "N/A"
         "Complejidad" = "N/A"
         "Historial" = "N/A"
-        "Antigüedad Máxima (días)" = "N/A"
+        "Antiguedad Máxima (días)" = "N/A"
     }
 
     foreach ($line in $output) {
-        if ($line -like "*Longitud mínima de la contrase?a*") {
-            $policy."Longitud Mínima" = ($line.Split(':')[1]).Trim()
+        if ($line -like "*Longitud minima de la password*") {
+            $policy."Longitud Minima" = ($line.Split(':')[1]).Trim()
         }
-        if ($line -like "*La complejidad de la contrase?a*") {
+        if ($line -like "*La complejidad de la password*") {
             $policy."Complejidad" = ($line.Split(':')[1]).Trim()
         }
-        if ($line -like "*Se guardan contraseñas en el historial*") {
+        if ($line -like "*Se guardan passwords en el historial*") {
             $policy."Historial" = ($line.Split(':')[1]).Trim()
         }
-        if ($line -like "*Antigüedad máxima de la contrase?a*") {
-            $policy."Antigüedad Máxima (días)" = ($line.Split(':')[1]).Trim()
+        if ($line -like "*Antiguedad maxima de la password*") {
+            $policy."Antiguedad Maxima (dias)" = ($line.Split(':')[1]).Trim()
         }
     }
 
     $policy.Keys | ForEach-Object {
         $results += [PSCustomObject]@{
-            "Parámetro de Seguridad" = $_
+            "Parametro de Seguridad" = $_
             "Valor" = $policy[$_]
         }
     }
@@ -260,7 +291,7 @@ function Analyze-PasswordPolicy {
 }
 
 function Find-InactiveUsers {
-    Write-Host "Buscando usuarios inactivos..." -ForegroundColor Yellow
+    Write-Host "`nBuscando usuarios inactivos..." -ForegroundColor Yellow
     try {
         $inactiveUsers = Get-LocalUser | Where-Object { $_.LastLogon -lt (Get-Date).AddDays(-90) }
         return $inactiveUsers | Select-Object Name, LastLogon, Enabled
@@ -271,13 +302,40 @@ function Find-InactiveUsers {
 }
 
 function Verify-FileSignatures {
-    Write-Host "Verificando firmas de archivos en rutas críticas... (Esto puede tardar unos minutos)" -ForegroundColor Yellow
+    Write-Host "Verificando firmas de archivos en rutas criticas... (Esto puede tardar unos minutos)" -ForegroundColor Yellow
+    
+    # Lista de rutas y programas que se consideran de confianza y se excluyen.
+    $excludedPaths = @(
+        "C:\Program Files\7-Zip*",
+        "C:\Program Files\AMD*",
+        "C:\Program Files\Autopsy*",
+        "C:\Program Files\Cisco Packet Tracer*",
+        "C:\Program Files\DigiDNA*",
+        "C:\Program Files\obs-studio*",
+        "C:\Program Files\Oracle*",
+        "C:\Program Files\Raspberry Pi Imager*",
+        "C:\Program Files\Samsung*",
+        "C:\Program Files\VideoLAN*",
+        "C:\WINDOWS\System32\config\systemprofile\AppData*",
+        "C:\WINDOWS\System32\DriverStore\Temp*"
+    )
+    
     $criticalPaths = @("$env:SystemRoot\System32", "$env:ProgramFiles", "$env:ProgramFiles(x86)")
     $unsignedFiles = @()
+
     foreach ($path in $criticalPaths) {
         Write-Host "  - Analizando ruta: $path" -ForegroundColor Gray
         try {
-            $files = Get-ChildItem -Path $path -Recurse -File -Include "*.exe", "*.dll" -ErrorAction SilentlyContinue
+            $files = Get-ChildItem -Path $path -Recurse -File -Include "*.exe", "*.dll" -ErrorAction SilentlyContinue | Where-Object {
+                $isExcluded = $false
+                foreach ($excluded in $excludedPaths) {
+                    if ($_.FullName -like $excluded) {
+                        $isExcluded = $true
+                        break
+                    }
+                }
+                -not $isExcluded
+            }
             
             foreach ($file in $files) {
                 $signature = Get-SafeAuthenticodeSignature -Path $file.FullName
@@ -287,14 +345,58 @@ function Verify-FileSignatures {
             }
         } catch { }
     }
+    
     Write-Host "Verificación de firmas de archivos completada." -ForegroundColor Green
-    return $unsignedFiles | Select-Object Name, Directory, LastWriteTime
+    
+    if ($unsignedFiles.Count -gt 0) {
+        Write-Host "Se encontraron archivos sin firma digital o con firma inválida:" -ForegroundColor Red
+        $unsignedFiles | Select-Object @{Name="Nombre"; Expression={$_.Name}},
+                                     @{Name="Directorio"; Expression={
+                                         $dir = $_.DirectoryName
+                                         if ($dir.Length -gt 60) {
+                                             "..." + $dir.Substring($dir.Length - 57)
+                                         } else {
+                                             $dir
+                                         }
+                                     }},
+                                     @{Name="Última Modificación"; Expression={$_.LastWriteTime}} | Format-Table -AutoSize
+
+        # --- Nuevo Menú para el Usuario ---
+        Write-Host "`n¿Qué desea hacer a continuación?" -ForegroundColor Cyan
+        Write-Host "1. Detener un proceso sin firma"
+        Write-Host "0. Volver al menú principal"
+        
+        $option = Read-Host "Seleccione una opción"
+        
+        switch ($option) {
+            "1" {
+                Stop-SuspiciousProcess
+            }
+            "0" {
+                # Volver al menú principal, no se requiere código extra aquí.
+            }
+            default {
+                Write-Host "Opción no válida. Volviendo al menú principal." -ForegroundColor Red
+            }
+        }
+    } else {
+        Write-Host "No se encontraron archivos sospechosos en las rutas críticas." -ForegroundColor Green
+    }
 }
 
 function Find-UnsignedProcesses {
-    Write-Host "Buscando procesos en ejecución sin firma digital... (Esto puede tardar unos segundos)" -ForegroundColor Yellow
+    Write-Host "`nBuscando procesos en ejecución sin firma digital... (Esto puede tardar unos segundos)" -ForegroundColor Yellow
+    
+    $excludedProcesses = @(
+        "steam.exe", "steamwebhelper.exe", "Discord.exe", 
+        "RiotClientServices.exe", "RiotClient.exe", "RiotVanguard.exe", "LeagueClient.exe", 
+        "EpicGamesLauncher.exe", "UnrealEngine.exe", "zoom.exe",
+        "chrome.exe", "firefox.exe", "msedge.exe"
+    )
+
     $unsignedProcesses = @()
-    $processes = Get-Process -ErrorAction SilentlyContinue
+    $processes = Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -notin $excludedProcesses }
+
     foreach ($process in $processes) {
         try {
             if ($process.Path) {
@@ -305,8 +407,8 @@ function Find-UnsignedProcesses {
             }
         } catch { }
     }
-    Write-Host "Búsqueda de procesos sin firma completada." -ForegroundColor Green
-    return $unsignedProcesses | Select-Object ProcessName, Path, ID, StartTime
+    Write-Host "`nBusqueda de procesos sin firma completada." -ForegroundColor Green
+    return $unsignedProcesses
 }
 
 function Stop-SuspiciousProcess {
@@ -315,7 +417,7 @@ function Stop-SuspiciousProcess {
         Write-Host "No se encontraron procesos sin firma para detener." -ForegroundColor Green
         return
     }
-    $processes | Format-Table -AutoSize
+    $processes | Select-Object ProcessName, Path, ID, StartTime | Format-Table -AutoSize
     Write-Host "Ingrese el PID del proceso que desea detener:" -ForegroundColor Cyan
     $pidToStop = Read-Host "PID"
     try {
@@ -325,7 +427,6 @@ function Stop-SuspiciousProcess {
         Write-Host "No se pudo detener el proceso. Verifique el PID y los permisos de Administrador." -ForegroundColor Red
     }
 }
-
 function Block-FileExecution {
     param(
         [string]$FileToBlock
@@ -345,7 +446,7 @@ function Block-FileExecution {
         New-NetFirewallRule -DisplayName $ruleName -Direction Outbound -Program $FileToBlock -Action Block
         Write-Host "Regla de Firewall '$ruleName' creada para bloquear la ejecución de '$FileToBlock'." -ForegroundColor Green
     } catch {
-        Write-Host "Error al crear la regla de Firewall. Asegúrese de tener permisos de Administrador." -ForegroundColor Red
+        Write-Host "Error al crear la regla de Firewall. Asegurese de tener permisos de Administrador." -ForegroundColor Red
     }
 }
 
@@ -358,28 +459,155 @@ function Find-RegistryAutorun {
         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce"
     )
     $suspiciousEntries = @()
+    $suspiciousProcesses = @()
+
+    # Lista de programas comunes a excluir.
+    $excludedPrograms = @(
+        "discord", "spotify", "riotgames", "steam", "epicgames", "zoom", "microsoft", "google"
+    )
+
     foreach ($path in $autorunPaths) {
         try {
             $keys = Get-ItemProperty -Path $path
             $keys.PSObject.Properties | ForEach-Object {
                 $prop = $_
                 if ($prop.Name -ne "PSPath" -and $prop.Name -ne "PSDrive" -and $prop.Name -ne "PSProvider" -and $prop.Name -ne "PSParentPath") {
-                    if ($prop.Value -and $prop.Value -notmatch "C:\\Windows" -and $prop.Value -notmatch "C:\\Program Files") {
-                        $suspiciousEntries += [PSCustomObject]@{
-                            "Clave" = $prop.Name
-                            "Ruta" = $prop.Value
-                            "Ubicacion" = $path
+                    $propValue = $prop.Value.ToLower()
+                    
+                    if ($propValue -and $propValue -notmatch "c:\\windows" -and $propValue -notmatch "c:\\program files" -and $propValue -notmatch "c:\\programdata") {
+                        $isExcluded = $false
+                        foreach ($excluded in $excludedPrograms) {
+                            if ($propValue -like "*$($excluded)*") {
+                                $isExcluded = $true
+                                break
+                            }
+                        }
+
+                        if (-not $isExcluded) {
+                            $suspiciousEntries += [PSCustomObject]@{
+                                "Clave" = $prop.Name
+                                "Ruta" = $prop.Value
+                                "Ubicacion" = $path
+                            }
                         }
                     }
                 }
             }
         } catch { }
     }
-    return $suspiciousEntries
+
+    if ($suspiciousEntries.Count -gt 0) {
+        Write-Host "Analizando si las entradas sospechosas están en ejecución..." -ForegroundColor Cyan
+        
+        # Correlacionar entradas de registro con procesos en ejecución
+        foreach ($entry in $suspiciousEntries) {
+            $processName = ($entry.Ruta | Select-String -Pattern "[\w-]+\.exe" -AllMatches).Matches.Value
+            if ($processName) {
+                $runningProcesses = Get-Process -Name $processName -ErrorAction SilentlyContinue
+                if ($runningProcesses) {
+                    $runningProcesses | ForEach-Object {
+                        $suspiciousProcesses += [PSCustomObject]@{
+                            "Proceso" = $_.ProcessName
+                            "ID" = $_.Id
+                            "Ruta" = $_.Path
+                            "Clave de Registro" = $entry.Clave
+                            "Ubicacion de Registro" = $entry.Ubicacion
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    if ($suspiciousProcesses.Count -gt 0) {
+        Write-Host "Se encontraron los siguientes procesos sospechosos en ejecución:" -ForegroundColor Red
+        $suspiciousProcesses | Format-Table -AutoSize
+        
+        Write-Host "`n¿Qué desea hacer a continuación?" -ForegroundColor Cyan
+        Write-Host "1. Detener un proceso de esta lista"
+        Write-Host "2. Eliminar una entrada de la lista de Autorun"
+        Write-Host "0. Volver al menú principal"
+        
+        $option = Read-Host "Seleccione una opción"
+        
+        switch ($option) {
+            "1" {
+                Write-Host "Ingrese el PID del proceso que desea detener:" -ForegroundColor Cyan
+                $pidToStop = Read-Host "PID del Proceso"
+                
+                try {
+                    Stop-Process -Id $pidToStop -Force -ErrorAction Stop
+                    Write-Host "Proceso con PID $pidToStop detenido exitosamente." -ForegroundColor Green
+                } catch {
+                    Write-Host "Error al detener el proceso. Verifique el PID y los permisos de Administrador." -ForegroundColor Red
+                }
+            }
+            "2" {
+                Write-Host "Ingrese el nombre de la Clave que desea eliminar (de la columna 'Clave de Registro'):" -ForegroundColor Cyan
+                $keyToBlock = Read-Host "Nombre de la Clave"
+                
+                $entryToBlock = $suspiciousProcesses | Where-Object { $_."Clave de Registro" -eq $keyToBlock } | Select-Object -First 1
+                
+                if ($entryToBlock) {
+                    try {
+                        Write-Host "Eliminando la clave del registro..." -ForegroundColor Yellow
+                        Remove-ItemProperty -Path $entryToBlock."Ubicacion de Registro" -Name $entryToBlock."Clave de Registro" -Force -ErrorAction Stop
+                        Write-Host "Clave del registro eliminada exitosamente." -ForegroundColor Green
+                    } catch {
+                        Write-Host "Error al eliminar la clave. Asegúrese de tener permisos de Administrador." -ForegroundColor Red
+                    }
+                } else {
+                    Write-Host "No se encontró la clave. Intente de nuevo." -ForegroundColor Red
+                }
+            }
+            "0" {
+                # Volver al menú principal.
+            }
+            default {
+                Write-Host "Opción no válida. Volviendo al menú principal." -ForegroundColor Red
+            }
+        }
+    } elseif ($suspiciousEntries.Count -gt 0) {
+        Write-Host "Se encontraron entradas de inicio automático sospechosas, pero no hay procesos en ejecución asociados." -ForegroundColor Yellow
+        Write-Host "`n¿Qué desea hacer a continuación?" -ForegroundColor Cyan
+        Write-Host "1. Eliminar una entrada de la lista de Autorun"
+        Write-Host "0. Volver al menú principal"
+        
+        $option = Read-Host "Seleccione una opción"
+        
+        switch ($option) {
+            "1" {
+                Write-Host "Ingrese el nombre de la Clave que desea eliminar (de la columna 'Clave'):" -ForegroundColor Cyan
+                $keyToBlock = Read-Host "Nombre de la Clave"
+                
+                $entryToBlock = $suspiciousEntries | Where-Object { $_.Clave -eq $keyToBlock } | Select-Object -First 1
+                
+                if ($entryToBlock) {
+                    try {
+                        Write-Host "Eliminando la clave del registro..." -ForegroundColor Yellow
+                        Remove-ItemProperty -Path $entryToBlock.Ubicacion -Name $entryToBlock.Clave -Force -ErrorAction Stop
+                        Write-Host "Clave del registro eliminada exitosamente." -ForegroundColor Green
+                    } catch {
+                        Write-Host "Error al eliminar la clave. Asegúrese de tener permisos de Administrador." -ForegroundColor Red
+                    }
+                } else {
+                    Write-Host "No se encontró la clave. Intente de nuevo." -ForegroundColor Red
+                }
+            }
+            "0" {
+                # Volver al menú principal.
+            }
+            default {
+                Write-Host "Opción no válida. Volviendo al menú principal." -ForegroundColor Red
+            }
+        }
+    } else {
+        Write-Host "No se encontraron entradas de inicio automático sospechosas." -ForegroundColor Green
+    }
 }
 
 function Analyze-NetworkConnections {
-    Write-Host "Analizando conexiones de red en busca de actividad sospechosa..." -ForegroundColor Yellow
+    Write-Host "`nAnalizando conexiones de red en busca de actividad sospechosa..." -ForegroundColor Yellow
     
     $excludedProcesses = @(
         "chrome.exe", "steam.exe", "steamwebhelper.exe",
@@ -429,8 +657,8 @@ function Analyze-NetworkConnections {
                     try {
                         $processToStop = Get-Process -Id $pidToClose -ErrorAction Stop
                         
-                        Write-Host "Se detendrá el proceso: $($processToStop.ProcessName) con PID $($pidToStop.Id)." -ForegroundColor Yellow
-                        Write-Host "¿Estás seguro? (S/N)" -ForegroundColor Red
+                        Write-Host "Se detendra el proceso: $($processToStop.ProcessName) con PID $($pidToStop.Id)." -ForegroundColor Yellow
+                        Write-Host "¿Estas seguro? (S/N)" -ForegroundColor Red
                         
                         $confirm = Read-Host
                         if ($confirm -eq "S" -or $confirm -eq "s") {
@@ -440,18 +668,18 @@ function Analyze-NetworkConnections {
                             
                             $postCloseMenu = $true
                             do {
-                                Write-Host "`nProceso cerrado. ¿Qué deseas hacer ahora?" -ForegroundColor Cyan
+                                Write-Host "`nProceso cerrado. ¿Que deseas hacer ahora?" -ForegroundColor Cyan
                                 Write-Host "1. Analizar el archivo ejecutable."
                                 Write-Host "2. Bloquear el archivo para que no vuelva a iniciar."
-                                Write-Host "3. Realizar un nuevo análisis de red."
-                                Write-Host "0. Volver al menú principal."
-                                $postCloseChoice = Read-Host "Opción"
+                                Write-Host "3. Realizar un nuevo analisis de red."
+                                Write-Host "0. Volver al menu principal."
+                                $postCloseChoice = Read-Host "Opcion"
                                 
                                 switch ($postCloseChoice) {
                                     "1" {
                                         if ($filePath) {
                                             Write-Host "Ruta del archivo analizado: $filePath" -ForegroundColor Green
-                                            Write-Host "Puedes buscar este archivo en el sistema de archivos para una inspección manual." -ForegroundColor White
+                                            Write-Host "Puedes buscar este archivo en el sistema de archivos para una inspeccion manual." -ForegroundColor White
                                         } else {
                                            Write-Host "No se pudo obtener la ruta del archivo ejecutable." -ForegroundColor Red
                                         }
@@ -472,20 +700,20 @@ function Analyze-NetworkConnections {
                                         $actionMenu = $false
                                     }
                                     default {
-                                        Write-Host "Opción no válida. Intente de nuevo." -ForegroundColor Red
+                                        Write-Host "Opcion no valida. Intente de nuevo." -ForegroundColor Red
                                     }
                                 }
                             } while ($postCloseMenu)
                             
                         } else {
-                            Write-Host "Operación cancelada." -ForegroundColor Red
+                            Write-Host "Operacion cancelada." -ForegroundColor Red
                         }
                         
                     } catch {
-                        Write-Host "No se pudo encontrar un proceso con ese PID. Asegúrese de que el número sea correcto y de tener permisos de Administrador." -ForegroundColor Red
+                        Write-Host "No se pudo encontrar un proceso con ese PID. Asegurese de que el numero sea correcto y de tener permisos de Administrador." -ForegroundColor Red
                     }
                 } else {
-                    Write-Host "Operación de cierre cancelada." -ForegroundColor Red
+                    Write-Host "Operacion de cierre cancelada." -ForegroundColor Red
                 }
             } else {
                 $actionMenu = $false
@@ -493,13 +721,13 @@ function Analyze-NetworkConnections {
         } while ($actionMenu)
         
     } else {
-        Write-Host "No se encontró actividad de red sospechosa." -ForegroundColor Green
+        Write-Host "No se encontro actividad de red sospechosa." -ForegroundColor Green
     }
 }
 
 
 function Find-HiddenFilesAndScan {
-    Write-Host "Buscando archivos ocultos en ProgramData y Usuarios..." -ForegroundColor Yellow
+    Write-Host "`nBuscando archivos ocultos en Programdata y Usuarios..." -ForegroundColor Yellow
     
     $suspiciousPaths = @(
         "C:\ProgramData",
@@ -530,7 +758,7 @@ function Find-HiddenFilesAndScan {
                 Start-Process -FilePath "C:\Program Files\Windows Defender\MpCmdRun.exe" -ArgumentList "-Scan -ScanType 3 -File $($file.FullName)" -Wait
             }
             Write-Host "`n¡Escaneo completado!" -ForegroundColor Green
-            Write-Host "Puedes ver los resultados de la detección en la interfaz de Windows Defender." -ForegroundColor Green
+            Write-Host "Puedes ver los resultados de la deteccion en la interfaz de Windows Defender." -ForegroundColor Green
         }
     } else {
         Write-Host "`nNo se encontraron archivos ocultos sospechosos." -ForegroundColor Green
@@ -538,18 +766,18 @@ function Find-HiddenFilesAndScan {
 }
 
 function Audit-FailedLogons {
-    Write-Host "Auditando inicios de sesión fallidos de las últimas 24 horas..." -ForegroundColor Yellow
+    Write-Host "`nAuditando inicios de sesion fallidos de las últimas 24 horas..." -ForegroundColor Yellow
     $lastDay = (Get-Date).AddDays(-1)
     
     try {
         $failedLogons = Get-WinEvent -FilterHashtable @{ Logname = 'Security'; Id = 4625; StartTime = $lastDay } -ErrorAction Stop
         
         if ($failedLogons) {
-            Write-Host "Se encontraron los siguientes intentos de inicio de sesión fallidos:" -ForegroundColor Red
+            Write-Host "Se encontraron los siguientes intentos de inicio de sesion fallidos:" -ForegroundColor Red
             $failedLogons | Select-Object TimeCreated, @{ Name = 'Usuario'; Expression = { $_.Properties[5].Value } }, @{ Name = 'Origen'; Expression = { $_.Properties[18].Value } } |
             Format-Table -AutoSize
         } else {
-            Write-Host "No se encontraron intentos de inicio de sesión fallidos en las últimas 24 horas." -ForegroundColor Green
+            Write-Host "No se encontraron intentos de inicio de sesion fallidos en las últimas 24 horas." -ForegroundColor Green
         }
         
     } catch {
@@ -557,7 +785,7 @@ function Audit-FailedLogons {
             Write-Host "No se encontraron intentos de inicio de sesión fallidos en las últimas 24 horas." -ForegroundColor Green
         } else {
             Write-Host "Error al acceder al registro de eventos. Detalles del error: $($_.Exception.Message)" -ForegroundColor Red
-            Write-Host "Asegúrese de ejecutar el script como Administrador." -ForegroundColor Red
+            Write-Host "Asegurese de ejecutar el script como Administrador." -ForegroundColor Red
         }
     }
 }
@@ -640,7 +868,17 @@ function Generate-HTMLReport {
     if ($reportData.PuertosAbiertosFirewall.Count -gt 0) {
         $html += "<table><thead><tr><th>Nombre</th><th>Dirección</th><th>Acción</th><th>Puerto</th></tr></thead><tbody>"
         $reportData.PuertosAbiertosFirewall | ForEach-Object {
-            $html += "<tr><td>$($_.DisplayName)</td><td>$($_.Direction)</td><td>$($_.Action)</td><td>$($_.LocalPort)</td></tr>"
+            # Recortar el nombre para que no supere los 20 caracteres
+            $displayName = $_.DisplayName
+            if ($displayName.Length -gt 20) {
+                $displayName = $displayName.Substring(0, 17) + "..."
+            }
+            # Recortar el puerto para que no supere los 20 caracteres
+            $localPort = $_.LocalPort
+            if ($localPort.Length -gt 20) {
+                $localPort = $localPort.Substring(0, 17) + "..."
+            }
+            $html += "<tr><td>$($displayName)</td><td>$($_.Direction)</td><td>$($_.Action)</td><td>$($localPort)</td></tr>"
         }
         $html += "</tbody></table>"
     } else {
@@ -707,29 +945,21 @@ function Generate-HTMLReport {
     Invoke-Item $reportPath
 }
 
-El error que estás viendo, "El valor no puede ser nulo. Nombre del parámetro: values", indica que la variable $info.AdministradoresLocales no tiene ningún valor (es null) cuando el script intenta usarla en la función Join.
-
-Este error ocurre cuando la función Get-LocalGroupMember -Group "Administrators" no puede obtener la lista de administradores locales. Esto puede suceder por varias razones, como no tener los permisos de administrador necesarios o que el grupo no exista en el sistema por algún motivo. En tu caso, es más probable que no tengas los permisos suficientes para ejecutar ese comando.
-
-Solución
-Para corregir este problema, necesitas manejar el escenario en el que la variable $info.AdministradoresLocales podría estar vacía o nula antes de intentar unir sus elementos.
-
-Aquí te muestro cómo se vería el código corregido. Debes modificar la función Get-UserInfo para que maneje este caso:
-
-PowerShell
-
 function Get-UserInfo {
-    Write-Host "Informacion del Usuario y Sistema:" -ForegroundColor Yellow
-    Write-Host "  - Usuario actual: $($env:USERNAME)"
-    Write-Host "  - Nombre del equipo: $($env:COMPUTERNAME)"
-    
+    $adminMembers = @()
     try {
-        $adminGroup = (Get-LocalGroup | Where-Object { $_.SID -eq "S-1-5-32-544" }).Name
-        $admins = (Get-LocalGroupMember -Group $adminGroup).Name
-        Write-Host "  - Administradores locales: $([string]::join(', ', $admins))"
+        # Intenta obtener los miembros del grupo de administradores.
+        $adminMembers = (Get-LocalGroupMember -Group "Administrators" -ErrorAction SilentlyContinue).Name
     } catch {
-        Write-Host "  - No se pudieron obtener los administradores locales." -ForegroundColor Red
+        # Si ocurre un error, $adminMembers se quedará como un array vacío.
     }
+    
+    $info = [PSCustomObject]@{
+        "UsuarioActual" = $env:USERNAME
+        "NombreEquipo" = $env:COMPUTERNAME
+        "AdministradoresLocales" = $adminMembers
+    }
+    return $info
 }
 
 function Set-WindowFocus {
@@ -745,11 +975,6 @@ function Test-AdminPrivileges {
 }
 
 function Get-RandomMacAddr {
-    # Genera una dirección MAC aleatoria que es administrada localmente y unicast
-    # Formato: 02:xx:xx:xx:xx:xx
-    # El primer octeto (02) cumple con las especificaciones de unicast (bit 0 del primer octeto es 0)
-    # y localmente administrado (bit 1 del primer octeto es 1).
-    # Genera 5 bytes aleatorios y los formatea como hex
     $bytes = New-Object byte[] 5
     (New-Object System.Security.Cryptography.RNGCryptoServiceProvider).GetBytes($bytes)
     $hexBytes = ($bytes | ForEach-Object { "{0:X2}" -f $_ }) -join ":"
@@ -830,7 +1055,6 @@ function Set-MacAddress {
             Write-Host "La dirección MAC de '$AdapterName' ha sido restaurada a su valor original." -ForegroundColor Green
         }
         
-        # Reiniciar el adaptador para aplicar los cambios
         Restart-NetAdapter -Name $AdapterName -Confirm:$false
         Write-Host "Adaptador reiniciado." -ForegroundColor Green
     } catch {
@@ -851,19 +1075,32 @@ function Update-AllWingetApps {
         Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
     }
 }
+
 # --- MENÚ PRINCIPAL ---
 function Show-MainMenu {
     Clear-Host
-    Write-Host "=============================================" -ForegroundColor Green
-    Write-Host "=                                           =" -ForegroundColor Green
-    Write-Host "=        Herramienta de Seguridad MediTool       =" -ForegroundColor Green
-    Write-Host "=                                           =" -ForegroundColor Green
-    Write-Host "=============================================" -ForegroundColor Green
+Write-Host "
+%	  ______   ______  ______  ______   ______  ______  ______    ______  
+%	 | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
+% 	 |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
+% 	 |______| |______||______||______| |______||______||______|  |______| 
+% 	  ______  				                      ______
+% 	 | |__| |   _  _   ____  ___   __  _____  ____   ____  _     | |__| | 
+% 	 |  ()  |  | \/ | |____||_  \ \__/|_ _ _| / _  \/ _  \| |    |  ()  | 
+% 	 |______|  | || | | _|  | |  | ||   | |  | |.| | |.|  | |    |______| 
+% 	  ______   | || | |__|_ |_|  | ||   | |  | |_| | |_|  | |_    ______
+% 	 | |__| |  |_||_| |____||___/ /__\  |_|   \____/\____/|___|  | |__| | 
+% 	 | () | |			                             |  ()  | 
+% 	 |______|			                             |______| 
+% 	  ______   ______  ______  ______   ______  ______  ______    ______  
+% 	 | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
+% 	 |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
+% 	 |______| |______||______||______| |______||______||______|  |______|
+" -ForegroundColor Cyan
     Write-Host "Bienvenido a MediTool, tu solución de seguridad Blue Team."
     Write-Host "Por favor, selecciona una opción del menú:"
     Write-Host ""
     
-    # Aquí es donde se define el menú
     $menuOptions = @(
         [PSCustomObject]@{ "ID" = 1; "Opcion" = "Revisar Estado de RDP y Últimas Conexiones"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 2; "Opcion" = "Auditar Reglas de Firewall Inseguras"; "Estado" = "N/A" },
@@ -898,13 +1135,18 @@ function Show-MainMenu {
         "1" {
             $rdpIn = Get-LastIncomingRDPLogon
             $rdpOut = Get-LastOutgoingRDPConnection
-            Write-Host "Estado del servicio RDP: $(Get-RDPStatus)"
-            Write-Host "Última conexión RDP entrante:`n  - Fecha: $(if ($rdpIn) { $rdpIn.Fecha } else { 'N/A' })`n  - Usuario: $(if ($rdpIn) { $rdpIn.Usuario } else { 'N/A' })`n  - Origen: $(if ($rdpIn) { $rdpIn.Origen } else { 'N/A' })"
-            Write-Host "Última conexión RDP saliente:`n  - Host/IP: $(if ($rdpOut) { $rdpOut.Host } else { 'N/A' })`n  - Fecha: $(if ($rdpOut) { $rdpOut.Fecha } else { 'N/A' })"
+            Write-Host "`nEstado del servicio RDP: $(Get-RDPStatus)"
+            Write-Host "`nUltima conexión RDP entrante:`n  - Fecha: $(if ($rdpIn) { $rdpIn.Fecha } else { 'N/A' })`n  - Usuario: $(if ($rdpIn) { $rdpIn.Usuario } else { 'N/A' })`n  - Origen: $(if ($rdpIn) { $rdpIn.Origen } else { 'N/A' })"
+            Write-Host "`nUltima conexión RDP saliente:`n  - Host/IP: $(if ($rdpOut) { $rdpOut.Host } else { 'N/A' })`n  - Fecha: $(if ($rdpOut) { $rdpOut.Fecha } else { 'N/A' })"
         }
         "2" {
             $rules = Get-FirewallStatus
-            if ($rules) { Write-Host "Reglas de Firewall que permiten conexiones entrantes:" -ForegroundColor Yellow; $rules | Format-Table -AutoSize } else { Write-Host "No se encontraron reglas de Firewall que permitan conexiones entrantes." -ForegroundColor Green }
+            if ($rules) { 
+                Write-Host "Reglas de Firewall que permiten conexiones entrantes:" -ForegroundColor Yellow
+                $rules | Format-Table -AutoSize 
+            } else { 
+                Write-Host "No se encontraron reglas de Firewall que permitan conexiones entrantes." -ForegroundColor Green 
+            }
         }
         "3" {
             Fix-FirewallPorts
@@ -917,28 +1159,42 @@ function Show-MainMenu {
         }
         "6" {
             $tasks = Find-MaliciousScheduledTasks
-            if ($tasks.Count -gt 0) { Write-Host "Se encontraron tareas programadas sospechosas:" -ForegroundColor Red; $tasks | Format-Table -AutoSize } else { Write-Host "No se encontraron tareas programadas sospechosas." -ForegroundColor Green }
+            if ($tasks.Count -gt 0) { 
+                Write-Host "Se encontraron tareas programadas sospechosas:" -ForegroundColor Red
+                $tasks | Format-Table -AutoSize 
+            } else { 
+                Write-Host "No se encontraron tareas programadas sospechosas." -ForegroundColor Green 
+            }
         }
         "7" {
-            Write-Host "Analizando la política de contraseñas..." -ForegroundColor Yellow
+            Write-Host "`nAnalizando la politica de contraseñas..." -ForegroundColor Yellow
             $policy = Analyze-PasswordPolicy
             if ($policy) {
                 $policy | Format-Table -AutoSize
             } else {
-                Write-Host "No se pudo obtener la política de contraseñas. Asegúrese de tener permisos." -ForegroundColor Red
+                Write-Host "No se pudo obtener la politica de contraseñas. Asegurese de tener permisos." -ForegroundColor Red
             }
         }
         "8" {
             $inactiveUsers = Find-InactiveUsers
-            if ($inactiveUsers.Count -gt 0) { Write-Host "Se encontraron las siguientes cuentas de usuario inactivas:" -ForegroundColor Red; $inactiveUsers | Format-Table -AutoSize } else { Write-Host "No se encontraron cuentas de usuario inactivas." -ForegroundColor Green }
+            if ($inactiveUsers.Count -gt 0) { 
+                Write-Host "Se encontraron las siguientes cuentas de usuario inactivas:" -ForegroundColor Red
+                $inactiveUsers | Format-Table -AutoSize 
+            } else { 
+                Write-Host "No se encontraron cuentas de usuario inactivas." -ForegroundColor Green 
+            }
         }
         "9" {
-            $unsignedFiles = Verify-FileSignatures
-            if ($unsignedFiles.Count -gt 0) { Write-Host "Se encontraron archivos sin firma digital o con firma inválida:" -ForegroundColor Red; $unsignedFiles | Format-Table -AutoSize } else { Write-Host "No se encontraron archivos sospechosos en las rutas críticas." -ForegroundColor Green }
+            Verify-FileSignatures
         }
         "10" {
             $unsignedProcesses = Find-UnsignedProcesses
-            if ($unsignedProcesses.Count -gt 0) { Write-Host "Se encontraron procesos en ejecución sin firma digital:" -ForegroundColor Red; $unsignedProcesses | Format-Table -AutoSize } else { Write-Host "No se encontraron procesos sin firma." -ForegroundColor Green }
+            if ($unsignedProcesses.Count -gt 0) { 
+                Write-Host "Se encontraron procesos en ejecución sin firma digital:" -ForegroundColor Red
+                $unsignedProcesses | Format-Table -AutoSize 
+            } else { 
+                Write-Host "No se encontraron procesos sin firma." -ForegroundColor Green 
+            }
         }
         "11" {
             Stop-SuspiciousProcess
@@ -947,14 +1203,14 @@ function Show-MainMenu {
             Block-FileExecution
         }
         "13" {
-            $suspiciousEntries = Find-RegistryAutorun
-            if ($suspiciousEntries.Count -gt 0) { Write-Host "Se encontraron entradas de inicio automático sospechosas en el registro:" -ForegroundColor Red; $suspiciousEntries | Format-Table -AutoSize } else { Write-Host "No se encontraron entradas sospechosas en el registro." -ForegroundColor Green }
+            Find-RegistryAutorun
         }
         "14" {
             Analyze-NetworkConnections
         }
         "15" {
-            Close-SuspiciousConnection
+            # Se ha eliminado la llamada a Close-SuspiciousConnection ya que está dentro de Analyze-NetworkConnections
+            Write-Host "La opción para cerrar conexiones se encuentra dentro del análisis de red (opción 14)."
         }
         "16" {
             Find-HiddenFilesAndScan
@@ -970,10 +1226,16 @@ function Show-MainMenu {
         }
         "20" {
             $info = Get-UserInfo
-            Write-Host "Información del Usuario y Sistema:" -ForegroundColor Yellow
+            Write-Host "`nInformacion del Usuario y Sistema:" -ForegroundColor Yellow
             Write-Host "  - Usuario actual: $($info.UsuarioActual)"
             Write-Host "  - Nombre del equipo: $($info.NombreEquipo)"
-            Write-Host "  - Administradores locales: $([string]::join(', ', $info.AdministradoresLocales))"
+            
+            $administrators = if ($info.AdministradoresLocales.Count -gt 0) {
+                [string]::join(', ', $info.AdministradoresLocales)
+            } else {
+                "No se pudieron obtener los administradores locales."
+            }
+            Write-Host "  - Administradores locales: $administrators"
         }
         "21" {
             MacChangerMenu
@@ -982,10 +1244,10 @@ function Show-MainMenu {
             Update-AllWingetApps
         }
         "0" {
-            break
+            exit
         }
         default {
-            Write-Host "Opción no válida. Por favor, intente de nuevo." -ForegroundColor Red
+            Write-Host "Opcion no valida. Por favor, intente de nuevo." -ForegroundColor Red
         }
     }
 
@@ -1000,17 +1262,3 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
-
-
-
-
-
-
-
-
-
-
-
-
-
-
