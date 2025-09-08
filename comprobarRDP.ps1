@@ -14,6 +14,7 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
         exit
     } catch {
         Write-Host "Error al intentar relanzar el script como Administrador." -ForegroundColor Red
+        pause
         exit
     }
 }
@@ -982,6 +983,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
