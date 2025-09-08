@@ -1142,12 +1142,10 @@ function Generate-HTMLReport {
 }
 
 function Get-UserInfo {
-    # Información del usuario y sistema
     Write-Host "Informacion del Usuario y Sistema:" -ForegroundColor Yellow
     Write-Host "  - Usuario actual: $($env:USERNAME)"
     Write-Host "  - Nombre del equipo: $($env:COMPUTERNAME)"
 
-    # Obtener administradores locales de forma fiable usando el SID
     Write-Host "`nInformacion de Administradores Locales:" -ForegroundColor Cyan
     try {
         $adminGroup = (Get-LocalGroup | Where-Object { $_.SID -eq "S-1-5-32-544" }).Name
@@ -1161,7 +1159,6 @@ function Get-UserInfo {
         Write-Host "  - No se pudieron obtener los administradores locales. Asegurese de tener permisos de Administrador." -ForegroundColor Red
     }
     
-    # Obtener informacion de la red y los adaptadores
     Write-Host "`nInformacion de Adaptadores de Red:" -ForegroundColor Cyan
     $networkAdapters = @()
     try {
@@ -1174,8 +1171,8 @@ function Get-UserInfo {
                     "Nombre" = $adapter.Name
                     "Tipo" = $adapter.InterfaceDescription
                     "DireccionMAC" = $mac
-                    "DireccionIP" = $ipAddress.IPAddress
-                    "Subred" = $ipAddress.PrefixLength
+                    "DireccionIP" = if ($ipAddress) { $ipAddress.IPAddress } else { "N/A" }
+                    "Subred" = if ($ipAddress) { $ipAddress.PrefixLength } else { "N/A" }
                 }
             }
             if ($networkAdapters.Count -gt 0) {
@@ -1521,6 +1518,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
