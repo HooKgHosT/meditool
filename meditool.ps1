@@ -1,6 +1,6 @@
 # Este script está diseñado como una herramienta de seguridad (Blue Team)
 # para la verificación y corrección de vulnerabilidades comunes en sistemas Windows 10 y 11.
-# Script version 1.4.0 (Fast Menu)
+# Script version 2.0.0 (Versión Final Estable por Programeta)
 
 # --- Lógica de autodescarga, elevación de permisos y limpieza ---
 $scriptName = "meditool.ps1"
@@ -23,6 +23,7 @@ if (($MyInvocation.MyCommand.Path -ne $tempPath) -and (-not (Test-AdminPrivilege
     } catch {
         Write-Host "Error al descargar o relanzar el script: $($_.Exception.Message)" -ForegroundColor Red
         Write-Host "Asegúrese de tener conexión a Internet y de que el enlace sea correcto." -ForegroundColor Red
+        Read-Host "Presione Enter para salir."
         exit 1
     }
 }
@@ -34,6 +35,7 @@ if (Test-AdminPrivileges) {
 # Variables globales
 $global:ActionLog = [System.Collections.Generic.List[PSCustomObject]]::new()
 $global:InitialSystemState = $null
+$global:VirusTotalApiKey = $null
 
 function Add-LogEntry {
     param(
@@ -48,64 +50,45 @@ function Add-LogEntry {
 
 $OutputEncoding = [System.Text.UTF8Encoding]::new()
 
-# --- Funciones de seguridad ---
+# --- Funciones de seguridad y auditoría ---
 
 function Get-SafeAuthenticodeSignature {
-    param(
-        [string]$Path
-    )
+    param([string]$Path)
     try {
         if (Test-Path -Path $Path -PathType Leaf) {
-            $signature = Get-AuthenticodeSignature -LiteralPath $Path -ErrorAction Stop
-            return $signature
+            return Get-AuthenticodeSignature -LiteralPath $Path -ErrorAction Stop
         }
     } catch {
         return [PSCustomObject]@{ Status = "Unknown" }
     }
+    return $null
 }
 
 function Get-RDPStatus {
     $service = Get-Service -Name TermService -ErrorAction SilentlyContinue
     if ($service) {
-        if ($service.Status -eq "Running") {
-            return "El servicio de RDP se está ejecutando."
-        } else {
-            return "El servicio de RDP está detenido."
-        }
-    } else {
-        return "El servicio de RDP no está instalado."
-    }
+        if ($service.Status -eq "Running") { "El servicio de RDP se está ejecutando." } else { "El servicio de RDP está detenido." }
+    } else { "El servicio de RDP no está instalado." }
 }
 
 function Get-LastIncomingRDPLogon {
     try {
         $event = Get-WinEvent -FilterHashtable @{Logname='Security'; Id=4624; Data='3389'} -MaxEvents 1 -ErrorAction Stop
         if ($event) {
-            $props = @{
-                "Fecha"   = $event.TimeCreated
-                "Usuario" = $event.Properties[5].Value
-                "Origen"  = $event.Properties[18].Value
-            }
-            return [PSCustomObject]$props
+            return [PSCustomObject]@{ Fecha = $event.TimeCreated; Usuario = $event.Properties[5].Value; Origen = $event.Properties[18].Value }
         }
-    } catch {
-        return $null
-    }
+    } catch { return $null }
+    return $null
 }
 
 function Get-LastOutgoingRDPConnection {
     try {
         $event = Get-WinEvent -FilterHashtable @{Logname='Microsoft-Windows-TerminalServices-Client/Operational'; Id=1024} -MaxEvents 1 -ErrorAction Stop
         if ($event) {
-            $props = @{
-                "Host" = $event.Properties[1].Value
-                "Fecha" = $event.TimeCreated
-            }
-            return [PSCustomObject]$props
+            return [PSCustomObject]@{ Host = $event.Properties[1].Value; Fecha = $event.TimeCreated }
         }
-    } catch {
-        return $null
-    }
+    } catch { return $null }
+    return $null
 }
 
 function Get-FirewallStatus {
@@ -247,6 +230,69 @@ function Invoke-PeasHardeningChecks {
     
     Write-Host "`n--- Chequeo de Hardening finalizado ---" -ForegroundColor Cyan
 }
+
+function Invoke-CredentialHardeningChecks {
+    Write-Host "`n--- Realizando Chequeos de Hardening contra Robo de Credenciales (Mimikatz) ---" -ForegroundColor Cyan
+    
+    # 1. Verificar si la Protección LSA (Local Security Authority) está activada
+    Write-Host "`n[1] Verificando la Protección LSA (RunAsPPL)..." -ForegroundColor Yellow
+    $lsaKey = "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa"
+    $lsaProtection = Get-ItemPropertyValue -Path $lsaKey -Name "RunAsPPL" -ErrorAction SilentlyContinue
+    if ($lsaProtection -eq 1) {
+        Write-Host "[OK] La Protección LSA está HABILITADA. lsass.exe se ejecuta como un proceso protegido." -ForegroundColor Green
+    } else {
+        Write-Host "[VULNERABLE] La Protección LSA está DESHABILITADA. Esto facilita que herramientas como Mimikatz extraigan credenciales de la memoria." -ForegroundColor Red
+        $fix = Read-Host "¿Desea HABILITAR la Protección LSA ahora (requiere reiniciar)? (S/N)"
+        if ($fix -eq 's') {
+            Set-ItemProperty -Path $lsaKey -Name "RunAsPPL" -Value 1 -Type DWord
+            Write-Host "[CORREGIDO] Protección LSA habilitada. Por favor, REINICIE el equipo para que el cambio surta efecto." -ForegroundColor Green
+            Add-LogEntry -Message "Protección LSA (RunAsPPL) habilitada."
+        }
+    }
+    
+    # 2. Verificar si WDigest está deshabilitado
+    Write-Host "`n[2] Verificando el proveedor de seguridad WDigest..." -ForegroundColor Yellow
+    $wdigestKey = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest"
+    $useLogonCred = Get-ItemPropertyValue -Path $wdigestKey -Name "UseLogonCredential" -ErrorAction SilentlyContinue
+    if ($useLogonCred -eq 0) {
+        Write-Host "[OK] WDigest está correctamente configurado para no almacenar credenciales en memoria." -ForegroundColor Green
+    } else {
+        Write-Host "[VULNERABLE] WDigest podría estar almacenando credenciales en texto claro en memoria." -ForegroundColor Red
+        $fix = Read-Host "¿Desea forzar la DESHABILITACIÓN de WDigest ahora? (S/N)"
+        if ($fix -eq 's') {
+            Set-ItemProperty -Path $wdigestKey -Name "UseLogonCredential" -Value 0 -Type DWord
+            Write-Host "[CORREGIDO] El almacenamiento de credenciales de WDigest ha sido deshabilitado." -ForegroundColor Green
+            Add-LogEntry -Message "Almacenamiento de credenciales de WDigest deshabilitado."
+        }
+    }
+
+    # 3. Comprobar si Credential Guard está activo
+    Write-Host "`n[3] Verificando el estado de Credential Guard (basado en virtualización)..." -ForegroundColor Yellow
+    try {
+        $cgStatus = (Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\Microsoft\Windows\DeviceGuard).SecurityServicesRunning
+        if ($cgStatus -contains "Credential Guard") {
+            Write-Host "[OK] Credential Guard está activo y protegiendo las credenciales." -ForegroundColor Green
+        } else {
+            Write-Host "[INFO] Credential Guard no está activo. Esta es una característica de alta seguridad para Windows Enterprise/Education." -ForegroundColor Cyan
+        }
+    } catch {
+        Write-Host "[INFO] No se pudo determinar el estado de Credential Guard. La característica puede no ser compatible." -ForegroundColor Cyan
+    }
+
+    # 4. Revisar la política de caché de credenciales de dominio
+    Write-Host "`n[4] Verificando la política de caché de credenciales de dominio..." -ForegroundColor Yellow
+    $cacheKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+    $cachedLogons = Get-ItemPropertyValue -Path $cacheKey -Name "CachedLogonsCount" -ErrorAction SilentlyContinue
+    if ($cachedLogons -gt 4) {
+        Write-Host "[ADVERTENCIA] El sistema está configurado para almacenar en caché '$($cachedLogons)' inicios de sesión. Se recomienda un valor bajo (ej. 2 o 0)." -ForegroundColor Yellow
+    } else {
+        Write-Host "[OK] La política de caché de credenciales está en un nivel aceptable (Valor: $($cachedLogons | Out-String).Trim())." -ForegroundColor Green
+    }
+
+    Write-Host "`n--- Chequeo de Credenciales finalizado ---" -ForegroundColor Cyan
+}
+
+
 
 function Fix-FirewallPorts {
     Write-Host "Cerrando puertos inseguros (RDP/WinRM)..." -ForegroundColor Yellow
@@ -841,6 +887,80 @@ function Clean-SystemJunk {
     Write-Host "`nLimpieza de carpetas temporales completada." -ForegroundColor Green
 }
 
+function Invoke-CredentialHardeningChecks {
+    Write-Host "`n--- Realizando Chequeos de Hardening contra Robo de Credenciales (Mimikatz) ---" -ForegroundColor Cyan
+    
+    # 1. Verificar si la Protección LSA (Local Security Authority) está activada
+    Write-Host "`n[1] Verificando la Protección LSA (RunAsPPL)..." -ForegroundColor Yellow
+    $lsaKey = "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa"
+    $lsaProtection = Get-ItemPropertyValue -Path $lsaKey -Name "RunAsPPL" -ErrorAction SilentlyContinue
+    if ($lsaProtection -eq 1) {
+        Write-Host "[OK] La Protección LSA está HABILITADA. lsass.exe se ejecuta como un proceso protegido." -ForegroundColor Green
+    } else {
+        Write-Host "[VULNERABLE] La Protección LSA está DESHABILITADA. Esto facilita que herramientas como Mimikatz extraigan credenciales de la memoria." -ForegroundColor Red
+        $fix = Read-Host "¿Desea HABILITAR la Protección LSA ahora (requiere reiniciar)? (S/N)"
+        if ($fix -eq 's') {
+            Set-ItemProperty -Path $lsaKey -Name "RunAsPPL" -Value 1 -Type DWord
+            Write-Host "[CORREGIDO] Protección LSA habilitada. Por favor, REINICIE el equipo para que el cambio surta efecto." -ForegroundColor Green
+            Add-LogEntry -Message "Protección LSA (RunAsPPL) habilitada."
+        }
+    }
+    
+    # 2. Verificar si WDigest está deshabilitado
+    Write-Host "`n[2] Verificando el proveedor de seguridad WDigest..." -ForegroundColor Yellow
+    $wdigestKey = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest"
+    $useLogonCred = Get-ItemPropertyValue -Path $wdigestKey -Name "UseLogonCredential" -ErrorAction SilentlyContinue
+    if ($useLogonCred -eq 0) {
+        Write-Host "[OK] WDigest está correctamente configurado para no almacenar credenciales en memoria." -ForegroundColor Green
+    } else {
+        Write-Host "[VULNERABLE] WDigest podría estar almacenando credenciales en texto claro en memoria." -ForegroundColor Red
+        $fix = Read-Host "¿Desea forzar la DESHABILITACIÓN de WDigest ahora? (S/N)"
+        if ($fix -eq 's') {
+            Set-ItemProperty -Path $wdigestKey -Name "UseLogonCredential" -Value 0 -Type DWord
+            Write-Host "[CORREGIDO] El almacenamiento de credenciales de WDigest ha sido deshabilitado." -ForegroundColor Green
+            Add-LogEntry -Message "Almacenamiento de credenciales de WDigest deshabilitado."
+        }
+    }
+
+    # 3. Comprobar si Credential Guard está activo
+    Write-Host "`n[3] Verificando el estado de Credential Guard (basado en virtualización)..." -ForegroundColor Yellow
+    try {
+        $cgStatus = (Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\Microsoft\Windows\DeviceGuard).SecurityServicesRunning
+        if ($cgStatus -contains "Credential Guard") {
+            Write-Host "[OK] Credential Guard está activo y protegiendo las credenciales." -ForegroundColor Green
+        } else {
+            Write-Host "[INFO] Credential Guard no está activo. Esta es una característica de alta seguridad para Windows Enterprise/Education." -ForegroundColor Cyan
+        }
+    } catch {
+        Write-Host "[INFO] No se pudo determinar el estado de Credential Guard. La característica puede no ser compatible." -ForegroundColor Cyan
+    }
+
+    # 4. Revisar la política de caché de credenciales de dominio
+    Write-Host "`n[4] Verificando la política de caché de credenciales de dominio..." -ForegroundColor Yellow
+    $cacheKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+    $cachedLogons = Get-ItemPropertyValue -Path $cacheKey -Name "CachedLogonsCount" -ErrorAction SilentlyContinue
+    if (!($cachedLogons)) { $cachedLogons = "No definido (defecto 10)"}
+    if ($cachedLogons -gt 4 -or $cachedLogons -like "*defecto*") {
+        Write-Host "[ADVERTENCIA] El sistema está configurado para almacenar en caché '$($cachedLogons)' inicios de sesión. Se recomienda un valor bajo (ej. 2 o 0)." -ForegroundColor Yellow
+    } else {
+        Write-Host "[OK] La política de caché de credenciales está en un nivel aceptable (Valor: $cachedLogons)." -ForegroundColor Green
+    }
+
+    Write-Host "`n--- Chequeo de Credenciales finalizado ---" -ForegroundColor Cyan
+}
+
+function Clean-ScriptFromTemp {
+    $tempFile = Join-Path $env:TEMP $scriptName
+    if (Test-Path $tempFile) {
+        try {
+            Remove-Item -Path $tempFile -Force -ErrorAction SilentlyContinue
+            Write-Host "Script temporal eliminado de $env:TEMP" -ForegroundColor Cyan
+        } catch {
+            Write-Host "No se pudo eliminar el script temporal." -ForegroundColor Red
+        }
+    }
+}
+
 function Find-OrphanedAndZeroByteFiles {
     Write-Host "`nBuscando archivos de 0 bytes..." -ForegroundColor Yellow
     $suspiciousPaths = @("$env:USERPROFILE", "C:\ProgramData")
@@ -920,8 +1040,7 @@ function Show-MainMenu {
     Write-Host "=============================================" -ForegroundColor Green
     Write-Host "=         Herramienta de Auditoría MediTool         =" -ForegroundColor Green
     Write-Host "=============================================" -ForegroundColor Green
-    Write-Host "Bienvenido a MediTool, tu solucion de seguridad Blue Team."
-    Write-Host "Por favor, selecciona una opcion del menu:"
+    Write-Host "Versión 2.0.0 (Estable) - por h00kGh0st & Programeta"
     Write-Host ""
     
     $menuOptions = @(
@@ -939,80 +1058,59 @@ function Show-MainMenu {
         [PSCustomObject]@{ "ID" = 12; "Opcion" = "Bloquear Ejecucion de Archivo" },
         [PSCustomObject]@{ "ID" = 13; "Opcion" = "Auditar Registro de Inicio Automatico (Autorun)" },
         [PSCustomObject]@{ "ID" = 14; "Opcion" = "Analizar Conexiones de Red" },
-        [PSCustomObject]@{ "ID" = 15; "Opcion" = "Mensaje ELMOnymous (h00kGh0st)" },
         [PSCustomObject]@{ "ID" = 16; "Opcion" = "Buscar Archivos Ocultos" },
         [PSCustomObject]@{ "ID" = 17; "Opcion" = "Auditar Inicios de Sesion Fallidos" },
-        [PSCustomObject]@{ "ID" = 18; "Opcion" = "Activar Windows (Advertencia de Seguridad)" },
         [PSCustomObject]@{ "ID" = 19; "Opcion" = "Generar Reporte de Seguridad (HTML)" },
         [PSCustomObject]@{ "ID" = 20; "Opcion" = "Informacion del Usuario y Sistema" },
-        [PSCustomObject]@{ "ID" = 21; "Opcion" = "Gestor de Direcciones MAC" },
         [PSCustomObject]@{ "ID" = 22; "Opcion" = "Actualizar todas las aplicaciones (winget)" },
         [PSCustomObject]@{ "ID" = 23; "Opcion" = "Verificacion de Estado (ISO 27001 simplificado)" },
         [PSCustomObject]@{ "ID" = 24; "Opcion" = "Limpiar Archivos Temporales del Sistema" },
         [PSCustomObject]@{ "ID" = 25; "Opcion" = "Buscar Archivos de 0 Bytes" },
         [PSCustomObject]@{ "ID" = 26; "Opcion" = "Analizar Memoria del Sistema" },
         [PSCustomObject]@{ "ID" = 27; "Opcion" = "Realizar Análisis Completo del Sistema (Necesario para Reporte)" },
-        [PSCustomObject]@{ "ID" = 28; "Opcion" = "Realizar Chequeo Anti-PEAS (Hardening)" }, # <--- ¡NUEVA OPCIÓN!
+        [PSCustomObject]@{ "ID" = 28; "Opcion" = "Realizar Chequeo Anti-PEAS (Hardening)" },
+        [PSCustomObject]@{ "ID" = 29; "Opcion" = "Realizar Chequeo Anti-Robo-Credenciales (Hardening)" },
+        [PSCustomObject]@{ "ID" = 88; "Opcion" = "Activar Windows (Advertencia de Seguridad)" },
+        [PSCustomObject]@{ "ID" = 99; "Opcion" = "Mensaje ELMOnymous (h00kGh0st)" },
         [PSCustomObject]@{ "ID" = 0; "Opcion" = "Salir" }
     )
     
     $script:menuOptions = $menuOptions
     $menuOptions | Format-Table -Property @{Expression="ID"; Width=4}, Opcion -HideTableHeaders
     
-    $selection = Read-Host "Ingresa el numero de la opcion que deseas ejecutar"
-    return $selection
+    return Read-Host "Ingresa el numero de la opcion que deseas ejecutar"
 }
-
-# --- INICIO DEL SCRIPT Y BUCLE PRINCIPAL ---
-Capture-InitialState
 # El script ahora inicia directamente en el menú.
 # La función Capture-InitialState se llama desde la Opción 27 o desde la 19 (Reporte).
+# --- INICIO DEL SCRIPT Y BUCLE PRINCIPAL ---
 
 while ($true) {
     $selection = Show-MainMenu
     
+    # Registrar la acción del usuario en el log
     $optionObject = $script:menuOptions | Where-Object { $_.ID -eq $selection }
     if ($optionObject) {
         Add-LogEntry -Message "Usuario seleccionó la opción '$($selection)': $($optionObject.Opcion)"
     }
 
+    # Lógica para cada opción del menú
     switch ($selection) {
-        "1" {
-            $rdpIn = Get-LastIncomingRDPLogon
-            $rdpOut = Get-LastOutgoingRDPConnection
-            Write-Host "`nEstado RDP: $(Get-RDPStatus)"
-            Write-Host "Última conexión ENTRANTE: $(if($rdpIn){$rdpIn | Out-String} else {'N/A'})"
-            Write-Host "Última conexión SALIENTE: $(if($rdpOut){$rdpOut | Out-String} else {'N/A'})"
-        }
+        "1" { Get-RDPStatus; Write-Host "`nÚltima Conexión Entrante:"; Get-LastIncomingRDPLogon | Format-List; Write-Host "`nÚltima Conexión Saliente:"; Get-LastOutgoingRDPConnection | Format-List }
         "2" { Get-FirewallStatus }
         "3" { Fix-FirewallPorts }
         "4" { Manage-RDP }
         "5" { Manage-WindowsTelemetry }
-        "6" { 
-            $tasks = Find-MaliciousScheduledTasks
-            if ($tasks) { $tasks | Format-Table -AutoSize } 
-            else { Write-Host "No se encontraron tareas sospechosas." -ForegroundColor Green }
-        }
+        "6" { Find-MaliciousScheduledTasks | Format-Table -AutoSize }
         "7" { Audit-NonEssentialServices }
-        "8" {
-            $inactiveUsers = Find-InactiveUsers
-            if ($inactiveUsers) { $inactiveUsers | Format-Table -AutoSize }
-            else { Write-Host "No se encontraron usuarios inactivos." -ForegroundColor Green }
-        }
+        "8" { Find-InactiveUsers | Format-Table -AutoSize }
         "9" { Verify-FileSignatures }
-        "10" { 
-            $unsigned = Find-UnsignedProcesses
-            if ($unsigned) { $unsigned | Format-Table -AutoSize }
-            else { Write-Host "No se encontraron procesos sin firma." -ForegroundColor Green }
-        }
+        "10" { Find-UnsignedProcesses | Format-Table -AutoSize }
         "11" { Stop-SuspiciousProcess }
         "12" { Block-FileExecution }
         "13" { Find-RegistryAutorun }
         "14" { Analyze-NetworkConnections }
-        "15" { Write-Host "Copyright (c) 2023 h00kGh0st" }
         "16" { Find-HiddenFilesAndScan }
         "17" { Audit-FailedLogons }
-        "18" { Activate-Windows }
         "19" { Generate-HTMLReport }
         "20" { Get-UserInfo | Format-List }
         "22" { Update-AllWingetApps }
@@ -1025,18 +1123,24 @@ while ($true) {
             Capture-InitialState
             Write-Host "Análisis completo y captura de estado finalizados." -ForegroundColor Green
         }
-        "28" {
-            Invoke-PeasHardeningChecks
-        }
+        "28" { Invoke-PeasHardeningChecks }
+        "29" { Invoke-CredentialHardeningChecks }
+        "88" { Activate-Windows }
+        "99" { Write-Host "Copyright (c) 2023 h00kGh0st" -ForegroundColor Cyan }
         "0" {
-            Clean-TempFolder
-            Write-Host "Saliendo..." -ForegroundColor Green
+            Clean-ScriptFromTemp
+            Write-Host "Saliendo del programa. ¡Adiós!" -ForegroundColor Green
+            Start-Sleep -Seconds 1
             exit
         }
-        default { Write-Host "Opción no válida." -ForegroundColor Red }
+        default {
+            Write-Host "Opción no válida. Por favor, intente de nuevo." -ForegroundColor Red
+        }
     }
 
+    # Pausa para que el usuario pueda ver el resultado antes de volver al menú
     if ($selection -ne "0") {
-        Read-Host "`nPresione Enter para continuar..." | Out-Null
+        Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+        Read-Host | Out-Null
     }
 }
