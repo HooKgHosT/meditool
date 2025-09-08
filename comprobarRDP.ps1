@@ -1270,14 +1270,15 @@ function Set-MacAddress {
     
     try {
         $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}"
-        $adapter = Get-ItemProperty -Path $regPath -EA 0 | Where-Object { $_.PSPath -match $AdapterName }
+        # Corrección: Buscar por DriverDesc en lugar de PSPath
+        $adapterKey = Get-ChildItem -Path $regPath -Recurse | Where-Object { (Get-ItemProperty -Path $_.PSPath).DriverDesc -eq $AdapterName } | Select-Object -First 1
         
-        if (-not $adapter) {
+        if (-not $adapterKey) {
             Write-Host "No se encontró el adaptador de red en el registro." -ForegroundColor Red
             return
         }
         
-        $adapterPath = $adapter.PSPath
+        $adapterPath = $adapterKey.PSPath
         
         if ($NewMacAddress) {
             Set-ItemProperty -Path $adapterPath -Name "NetworkAddress" -Value $NewMacAddress -Type String -Force
@@ -1745,6 +1746,7 @@ while ($true) {
         Read-Host | Out-Null
     }
 }
+
 
 
 
