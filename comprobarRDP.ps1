@@ -1113,7 +1113,7 @@ function Clean-TempFolder {
         Write-Host "Error al limpiar la carpeta TEMP. Algunos archivos pueden estar en uso." -ForegroundColor Red
     }
 }
-function Check-ISO27001Status {
+function Check-ISO {
     Write-Host "======================================================== -ForegroundColor Cyan
     Write-Host "==            Estado de Seguridad (ISO 27001)         == -ForegroundColor Cyan
     Write-Host "======================================================== -ForegroundColor Cyan
@@ -1121,7 +1121,7 @@ function Check-ISO27001Status {
     $passed = $true
     
     # Control A.5.1.1: Políticas de seguridad
-    Write-Host "A.5.1.1 - Se ha detectado una política de contraseñas." -ForegroundColor Green
+    Write-Host "`nA.5.1.1 - Se ha detectado una política de contraseñas." -ForegroundColor Green
     
     # Control A.12.2.1: Controles contra el malware
     Write-Host "`nVerificando el estado del antivirus..."
@@ -1130,11 +1130,11 @@ function Check-ISO27001Status {
         if ($defenderStatus.AntivirusEnabled -eq $true) {
             Write-Host "A.12.2.1 - Windows Defender está activo y en ejecución." -ForegroundColor Green
         } else {
-            Write-Host "A.12.2.1 - Windows Defender está deshabilitado. Se recomienda activarlo." -ForegroundColor Red
+            Write-Host "`nA.12.2.1 - Windows Defender está deshabilitado. Se recomienda activarlo." -ForegroundColor Red
             $passed = $false
         }
     } catch {
-        Write-Host "A.12.2.1 - No se pudo verificar el estado del antivirus." -ForegroundColor Red
+        Write-Host "`nA.12.2.1 - No se pudo verificar el estado del antivirus." -ForegroundColor Red
         $passed = $false
     }
 
@@ -1142,9 +1142,9 @@ function Check-ISO27001Status {
     Write-Host "`nVerificando el servicio de RDP (Escritorio Remoto)..."
     $rdpStatus = Get-ItemPropertyValue -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -ErrorAction SilentlyContinue
     if ($rdpStatus -eq 1) {
-        Write-Host "A.13.2.1 - El servicio RDP está deshabilitado." -ForegroundColor Green
+        Write-Host "`nA.13.2.1 - El servicio RDP está deshabilitado." -ForegroundColor Green
     } else {
-        Write-Host "A.13.2.1 - El servicio RDP está habilitado. Asegúrate de que sea necesario y esté protegido." -ForegroundColor Yellow
+        Write-Host "`nA.13.2.1 - El servicio RDP está habilitado. Asegúrate de que sea necesario y esté protegido." -ForegroundColor Yellow
     }
 
     # Control A.12.1.2: Gestión de cambios
@@ -1350,3 +1350,4 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
