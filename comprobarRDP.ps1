@@ -1,10 +1,23 @@
 # Este script está diseñado como una herramienta de seguridad (Blue Team)
 # para la verificación y corrección de vulnerabilidades comunes en sistemas Windows 10 y 11.
+# --- Comprobacion de permisos de administrador ---
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    # Si el script no se está ejecutando como administrador, solicita elevación.
-    $arguments = "& '" + $myinvocation.mycommand.definition + "'"
-    Start-Process powershell -Verb runAs -ArgumentList $arguments
-    Exit
+    try {
+        # Crear archivo temporal con el script descargado
+        $tempScript = [System.IO.Path]::GetTempFileName().Replace(".tmp",".ps1")
+
+        # Descargar nuevamente el script desde la URL original
+        # IMPORTANTE: reemplazar con la URL de tu repositorio en GitHub
+        $scriptUrl = "https://raw.githubusercontent.com/usuario/repositorio/rama/archivo.ps1"
+        Invoke-WebRequest -Uri $scriptUrl -OutFile $tempScript -UseBasicParsing
+
+        # Relanzar como administrador ejecutando el archivo temporal
+        Start-Process powershell -Verb RunAs -ArgumentList "-ExecutionPolicy Bypass -File `"$tempScript`""
+        exit
+    } catch {
+        Write-Host "Error al intentar relanzar el script como Administrador." -ForegroundColor Red
+        exit
+    }
 }
 
 
@@ -971,6 +984,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
