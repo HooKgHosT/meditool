@@ -347,32 +347,116 @@ function Find-MaliciousScheduledTasks {
     }
 }
 
+Ya veo, te gustaría que la gestión de servicios esté dentro del menú 7. Es un excelente punto, ya que hace que la funcionalidad sea más accesible y coherente con la auditoría de servicios no esenciales.
+
+He integrado la gestión de servicios en el menú 7. Ahora, el script hará lo siguiente:
+
+Ejecutar el análisis de servicios no esenciales.
+
+Si se encuentran servicios en ejecución, el script mostrará un menú adicional con opciones para gestionarlos.
+
+El usuario podrá seleccionar una acción (iniciar, detener, deshabilitar, eliminar) y aplicarla a un servicio específico de la lista.
+
+Este enfoque crea un flujo de trabajo lógico y útil para la gestión de servicios.
+
+Código Actualizado
+Aquí tienes la versión completa y corregida del código. Reemplaza las funciones Audit-NonEssentialServices y Show-MainMenu en tu script. Ya no necesitas la función Manage-Service por separado, ya que he integrado su lógica directamente.
+
+PowerShell
+
 function Audit-NonEssentialServices {
-    Write-Host "`nAuditoria de servicios no esenciales en ejecucion..." -ForegroundColor Yellow
+    $shouldContinue = $true
+    do {
+        Write-Host "`nAuditoria de servicios no esenciales en ejecucion..." -ForegroundColor Yellow
+        
+        # Lista de servicios no esenciales que comunmente se pueden deshabilitar
+        $nonEssentialServices = @(
+            "Fax",
+            "HomeGroupProvider",
+            "Spooler", # Servicio de impresion
+            "Themes",
+            "WSearch", # Windows Search
+            "DiagTrack", # Servicio de diagnostico
+            "CDPSvc", # Connected Devices Platform
+            "PcaSvc", # Program Compatibility Assistant Service
+            "RemoteRegistry",
+            "SensorService" # Servicio de sensores de Windows
+        )
     
-    # Lista de servicios no esenciales que comunmente se pueden deshabilitar
-    $nonEssentialServices = @(
-        "Fax",
-        "HomeGroupProvider",
-        "Spooler", # Servicio de impresion
-        "Themes",
-        "WSearch", # Windows Search
-        "DiagTrack", # Servicio de diagnostico
-        "CDPSvc", # Connected Devices Platform
-        "PcaSvc", # Program Compatibility Assistant Service
-        "RemoteRegistry",
-        "SensorService" # Servicio de sensores de Windows
-    )
+        $runningNonEssential = Get-Service -Name $nonEssentialServices -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Running' }
 
-    $runningNonEssential = Get-Service -Name $nonEssentialServices -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Running' }
-
-    if ($runningNonEssential.Count -gt 0) {
-        Write-Host "Se encontraron los siguientes servicios no esenciales en ejecucion:" -ForegroundColor Red
-        $runningNonEssential | Select-Object Name, DisplayName, Status | Format-Table -AutoSize
-        Write-Host "`nConsidere deshabilitar estos servicios para mejorar la seguridad y el rendimiento." -ForegroundColor Yellow
-    } else {
-        Write-Host "No se encontraron servicios no esenciales en ejecucion." -ForegroundColor Green
-    }
+        if ($runningNonEssential.Count -gt 0) {
+            Write-Host "Se encontraron los siguientes servicios no esenciales en ejecucion:" -ForegroundColor Red
+            $runningNonEssential | Select-Object Name, DisplayName, Status | Format-Table -AutoSize
+            Write-Host "`n¿Que desea hacer a continuacion?" -ForegroundColor Cyan
+            Write-Host "1. Gestionar un servicio de esta lista"
+            Write-Host "0. Volver al menu principal"
+            
+            $choice = Read-Host "Seleccione una opcion"
+            
+            if ($choice -eq "1") {
+                Write-Host "`nOpciones para gestionar un servicio:" -ForegroundColor Cyan
+                Write-Host "1. Iniciar servicio"
+                Write-Host "2. Detener servicio"
+                Write-Host "3. Deshabilitar servicio"
+                Write-Host "4. Eliminar servicio (Advertencia)"
+                $serviceAction = Read-Host "Seleccione una accion"
+                
+                $serviceName = Read-Host "Ingrese el nombre del servicio que desea gestionar"
+                
+                try {
+                    $service = Get-Service -Name $serviceName -ErrorAction Stop
+                    
+                    switch ($serviceAction) {
+                        "1" {
+                            if ($service.Status -ne "Running") {
+                                Start-Service -InputObject $service -ErrorAction Stop
+                                Write-Host "Servicio '$serviceName' iniciado exitosamente." -ForegroundColor Green
+                            } else {
+                                Write-Host "El servicio '$serviceName' ya esta en ejecucion." -ForegroundColor Yellow
+                            }
+                        }
+                        "2" {
+                            if ($service.Status -ne "Stopped") {
+                                Stop-Service -InputObject $service -ErrorAction Stop
+                                Write-Host "Servicio '$serviceName' detenido exitosamente." -ForegroundColor Green
+                            } else {
+                                Write-Host "El servicio '$serviceName' ya esta detenido." -ForegroundColor Yellow
+                            }
+                        }
+                        "3" {
+                            Set-Service -InputObject $service -StartupType Disabled -ErrorAction Stop
+                            Write-Host "Servicio '$serviceName' deshabilitado exitosamente." -ForegroundColor Green
+                        }
+                        "4" {
+                            Write-Host "ADVERTENCIA: ¿Estas seguro de que quieres eliminar el servicio '$serviceName'? Esto no se puede deshacer. (S/N)" -ForegroundColor Red
+                            $confirm = Read-Host
+                            if ($confirm -eq "S" -or $confirm -eq "s") {
+                                Get-CimInstance -ClassName Win32_Service -Filter "Name='$serviceName'" | Invoke-CimMethod -MethodName Delete -ErrorAction Stop
+                                Write-Host "Servicio '$serviceName' eliminado exitosamente." -ForegroundColor Green
+                            } else {
+                                Write-Host "Operacion de eliminacion cancelada." -ForegroundColor Yellow
+                            }
+                        }
+                        default {
+                            Write-Host "Accion no valida." -ForegroundColor Red
+                        }
+                    }
+                } catch {
+                    Write-Host "Error: No se pudo encontrar o manipular el servicio '$serviceName'. Asegurese de que el nombre es correcto y de tener permisos de Administrador." -ForegroundColor Red
+                }
+            } elseif ($choice -eq "0") {
+                $shouldContinue = $false
+            } else {
+                Write-Host "Opcion no valida. Intente de nuevo." -ForegroundColor Red
+            }
+        } else {
+            Write-Host "No se encontraron servicios no esenciales en ejecucion." -ForegroundColor Green
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
+            $shouldContinue = $false
+        }
+    } while ($shouldContinue)
 }
 
 function Find-InactiveUsers {
@@ -1185,6 +1269,7 @@ function Set-MacAddress {
             Write-Host "La direccion MAC de '$AdapterName' ha sido restaurada a su valor original." -ForegroundColor Green
         }
         
+        # Reiniciar el adaptador de red para aplicar los cambios
         Restart-NetAdapter -Name $AdapterName -Confirm:$false
         Write-Host "Adaptador reiniciado." -ForegroundColor Green
     } catch {
@@ -1276,7 +1361,7 @@ function Show-MainMenu {
     Clear-Host
     Write-Host "=============================================" -ForegroundColor Green
     Write-Host "=                                           =" -ForegroundColor Green
-    Write-Host "=         Herramienta de Seguridad MediTool =" -ForegroundColor Green
+    Write-Host "=    Herramienta de Seguridad MediTool      =" -ForegroundColor Green
     Write-Host "=                                           =" -ForegroundColor Green
     Write-Host "=============================================" -ForegroundColor Green
     Write-Host "Bienvenido a MediTool, tu solucion de seguridad Blue Team."
@@ -1323,13 +1408,7 @@ function Show-MainMenu {
             Write-Host "`nUltima conexion RDP saliente:`n  - Host/IP: $(if ($rdpOut) { $rdpOut.Host } else { 'N/A' })`n  - Fecha: $(if ($rdpOut) { $rdpOut.Fecha } else { 'N/A' })"
         }
         "2" {
-            $rules = Get-FirewallStatus
-            if ($rules) { 
-                Write-Host "Reglas de Firewall que permiten conexiones entrantes:" -ForegroundColor Yellow
-                $rules | Format-Table -AutoSize 
-            } else { 
-                Write-Host "No se encontraron reglas de Firewall que permitan conexiones entrantes." -ForegroundColor Green 
-            }
+            Get-FirewallStatus
         }
         "3" {
             Fix-FirewallPorts
@@ -1342,11 +1421,11 @@ function Show-MainMenu {
         }
         "6" {
             $tasks = Find-MaliciousScheduledTasks
-            if ($tasks.Count -gt 0) { 
+            if ($tasks.Count -gt 0) {
                 Write-Host "Se encontraron tareas programadas sospechosas:" -ForegroundColor Red
-                $tasks | Format-Table -AutoSize 
-            } else { 
-                Write-Host "No se encontraron tareas programadas sospechosas." -ForegroundColor Green 
+                $tasks | Format-Table -AutoSize
+            } else {
+            Write-Host "No se encontraron tareas programadas sospechosas." -ForegroundColor Green
             }
         }
         "7" {
@@ -1354,11 +1433,11 @@ function Show-MainMenu {
         }
         "8" {
             $inactiveUsers = Find-InactiveUsers
-            if ($inactiveUsers.Count -gt 0) { 
+            if ($inactiveUsers.Count -gt 0) {
                 Write-Host "Se encontraron las siguientes cuentas de usuario inactivas:" -ForegroundColor Red
-                $inactiveUsers | Format-Table -AutoSize 
-            } else { 
-                Write-Host "No se encontraron cuentas de usuario inactivas." -ForegroundColor Green 
+                $inactiveUsers | Format-Table -AutoSize
+            } else {
+                Write-Host "No se encontraron cuentas de usuario inactivas." -ForegroundColor Green
             }
         }
         "9" {
@@ -1366,11 +1445,11 @@ function Show-MainMenu {
         }
         "10" {
             $unsignedProcesses = Find-UnsignedProcesses
-            if ($unsignedProcesses.Count -gt 0) { 
+            if ($unsignedProcesses.Count -gt 0) {
                 Write-Host "Se encontraron procesos en ejecucion sin firma digital:" -ForegroundColor Red
-                $unsignedProcesses | Format-Table -AutoSize 
-            } else { 
-                Write-Host "No se encontraron procesos sin firma." -ForegroundColor Green 
+                $unsignedProcesses | Format-Table -AutoSize
+            } else {
+                Write-Host "No se encontraron procesos sin firma." -ForegroundColor Green
             }
         }
         "11" {
@@ -1405,7 +1484,7 @@ function Show-MainMenu {
             Write-Host "`nInformacion del Usuario y Sistema:" -ForegroundColor Yellow
             Write-Host "  - Usuario actual: $($info.UsuarioActual)"
             Write-Host "  - - Nombre del equipo: $($info.NombreEquipo)"
-            
+        
             $administrators = if ($info.AdministradoresLocales.Count -gt 0) {
                 [string]::join(', ', $info.AdministradoresLocales)
             } else {
@@ -1439,10 +1518,6 @@ function Show-MainMenu {
         }
     }
 
-    Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
-    Read-Host | Out-Null
-}
-
 # Iniciar el bucle del menu
 while ($true) {
     Show-MainMenu
@@ -1450,6 +1525,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
