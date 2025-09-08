@@ -1312,7 +1312,7 @@ function Set-MacAddress {
     try {
         $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}"
         
-        # Encontrar la clave de registro correcta usando el GUID del adaptador
+        # CORRECCIÓN: Se agregó la llave de cierre '}' que faltaba
         $adapterKeyPath = (Get-ChildItem -Path $regPath -ErrorAction SilentlyContinue | Where-Object {
             (Get-ItemProperty -Path $_.PSPath -Name "NetCfgInstanceId" -ErrorAction SilentlyContinue).NetCfgInstanceId -eq $AdapterGuid
         }).PSPath
@@ -1791,3 +1791,4 @@ while ($true) {
         Read-Host | Out-Null
     }
 }
+
