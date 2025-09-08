@@ -1,6 +1,6 @@
 # Este script está diseñado como una herramienta de seguridad (Blue Team)
 # para la verificación y corrección de vulnerabilidades comunes en sistemas Windows 10 y 11.
-# Script version 1.0.0
+# Script version 1.1.0
 
 # --- Lógica de autodescarga, elevación de permisos y limpieza ---
 $scriptName = "meditool.ps1"
@@ -12,7 +12,6 @@ function Test-AdminPrivileges {
     return $current.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# Si el script no se está ejecutando desde la ruta temporal y no tiene permisos de administrador, se descarga y se relanza.
 if (($MyInvocation.MyCommand.Path -ne $tempPath) -and (-not (Test-AdminPrivileges))) {
     try {
         Write-Host "Iniciando la descarga del script temporal..." -ForegroundColor Yellow
@@ -28,15 +27,13 @@ if (($MyInvocation.MyCommand.Path -ne $tempPath) -and (-not (Test-AdminPrivilege
     }
 }
 
-# Esta parte solo se ejecuta si el script se ha relanzado con permisos de administrador.
 if (Test-AdminPrivileges) {
     Write-Host "El script se está ejecutando con permisos de Administrador." -ForegroundColor Green
 }
 
-# Variables globales para el MAC Changer
-$global:AdapterName = $null
+# Variables globales
 $global:ActionLog = [System.Collections.Generic.List[PSCustomObject]]::new()
-$global:InitialSystemState = $null # Para guardar el estado inicial
+$global:InitialSystemState = $null
 
 function Add-LogEntry {
     param(
@@ -48,7 +45,7 @@ function Add-LogEntry {
     }
     $global:ActionLog.Add($logEntry)
 }
-# Cambiar la codificación para que se muestren los caracteres especiales correctamente
+
 $OutputEncoding = [System.Text.UTF8Encoding]::new()
 
 # --- Funciones de seguridad ---
@@ -92,7 +89,6 @@ function Get-LastIncomingRDPLogon {
             return [PSCustomObject]$props
         }
     } catch {
-        # Si ocurre un error (ej. no se encuentran eventos), no devuelve nada.
         return $null
     }
 }
@@ -115,8 +111,7 @@ function Get-LastOutgoingRDPConnection {
 function Get-FirewallStatus {
     $shouldContinue = $true
     do {
-        Write-Host "`nMostrando reglas de firewall de entrada activas (visibilidad optimizada para consolas)..." -ForegroundColor Yellow
-        
+        Write-Host "`nMostrando reglas de firewall de entrada activas..." -ForegroundColor Yellow
         try {
             $allRules = Get-NetFirewallRule | Where-Object { 
                 $_.Enabled -eq "True" -and ($_.Direction -eq "Inbound" -or $_.Direction -eq "Both") -and ($_.Action -eq "Allow")
@@ -124,11 +119,10 @@ function Get-FirewallStatus {
 
             if ($allRules.Count -gt 0) {
                 Write-Host "Se encontraron las siguientes reglas de firewall:" -ForegroundColor Green
-                
                 $allRules | ForEach-Object {
                     $rule = $_
-                    $programName = Split-Path -Path $rule.ProgramName -Leaf
-                    $process = Get-Process -Name $programName -ErrorAction SilentlyContinue | Select-Object -First 1
+                    $programName = if ($rule.Program) { Split-Path -Path $rule.Program -Leaf } else { "N/A" }
+                    $process = if ($programName -ne "N/A") { Get-Process -Name $programName -ErrorAction SilentlyContinue | Select-Object -First 1 } else { $null }
                     $pid = if ($process) { $process.Id } else { "N/A" }
                     
                     Write-Host "Regla: $($rule.DisplayName)" -ForegroundColor White
@@ -142,10 +136,9 @@ function Get-FirewallStatus {
                 Write-Host "No se encontraron reglas de firewall que permitan conexiones entrantes." -ForegroundColor Green
             }
         } catch {
-            Write-Host "Error al obtener las reglas del Firewall. Verifique si el comando se ejecutó con privilegios de Administrador y reintente." -ForegroundColor Red
+            Write-Host "Error al obtener las reglas del Firewall." -ForegroundColor Red
         }
 
-        # Menú de acciones
         Write-Host "`n¿Qué desea hacer a continuación?" -ForegroundColor Cyan
         Write-Host "1. Volver a escanear"
         Write-Host "2. Cerrar un proceso por PID"
@@ -155,25 +148,17 @@ function Get-FirewallStatus {
         $choice = Read-Host "Seleccione una opción"
         
         switch ($choice) {
-            "1" {
-                # Se repite el bucle, volviendo a escanear
-            }
+            "1" {}
             "2" {
-                Write-Host "`nIngrese el PID del proceso que desea cerrar:" -ForegroundColor Yellow
-                $pidToClose = Read-Host "PID del proceso"
+                $pidToClose = Read-Host "PID del proceso a cerrar"
                 Stop-OrBlock-Process -pid $pidToClose -action "close"
             }
             "3" {
-                Write-Host "`nIngrese el PID del proceso que desea bloquear:" -ForegroundColor Yellow
-                $pidToBlock = Read-Host "PID del proceso"
+                $pidToBlock = Read-Host "PID del proceso a bloquear"
                 Stop-OrBlock-Process -pid $pidToBlock -action "block"
             }
-            "0" {
-                $shouldContinue = $false
-            }
-            default {
-                Write-Host "Opción no válida. Intente de nuevo." -ForegroundColor Red
-            }
+            "0" { $shouldContinue = $false }
+            default { Write-Host "Opción no válida." -ForegroundColor Red }
         }
     } while ($shouldContinue)
 }
@@ -185,7 +170,6 @@ function Stop-OrBlock-Process {
         [Parameter(Mandatory=$true)]
         [string]$action
     )
-    
     try {
         $process = Get-Process -Id $pid -ErrorAction Stop
         $processPath = $process.Path
@@ -193,40 +177,35 @@ function Stop-OrBlock-Process {
 
         if ($action -eq "close") {
             Stop-Process -Id $pid -Force
-            Write-Host "Proceso '$programName' con PID $pid cerrado exitosamente." -ForegroundColor Green
+            Write-Host "Proceso '$programName' con PID $pid cerrado." -ForegroundColor Green
         } elseif ($action -eq "block") {
             $ruleName = "Bloqueado por MediTool - $programName"
-            $existingRule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
-            
-            if (-not $existingRule) {
+            if (-not (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue)) {
                 New-NetFirewallRule -DisplayName $ruleName -Direction Outbound -Program $processPath -Action Block
-                Write-Host "Regla de firewall creada para bloquear el programa '$programName'." -ForegroundColor Green
+                Write-Host "Regla de firewall creada para '$programName'." -ForegroundColor Green
             } else {
-                Write-Host "Una regla de firewall para '$programName' ya existe. No se realizaron cambios." -ForegroundColor Yellow
+                Write-Host "Una regla para '$programName' ya existe." -ForegroundColor Yellow
             }
-            
-            Write-Host "Cerrando el proceso para aplicar el cambio..." -ForegroundColor Cyan
             Stop-Process -Id $pid -Force
-            Write-Host "Proceso '$programName' con PID $pid cerrado exitosamente." -ForegroundColor Green
+            Write-Host "Proceso '$programName' cerrado." -ForegroundColor Green
         }
     } catch {
-        Write-Host "Error: No se pudo encontrar o manipular el proceso con el PID $pid. Verifique el PID y los permisos de Administrador." -ForegroundColor Red
+        Write-Host "Error: No se pudo manipular el proceso con PID $pid." -ForegroundColor Red
     }
 }
 
 function Fix-FirewallPorts {
-    Write-Host "Cerrando puertos abiertos no seguros..." -ForegroundColor Yellow
+    Write-Host "Cerrando puertos inseguros (RDP/WinRM)..." -ForegroundColor Yellow
     try {
-        $rules = Get-NetFirewallRule | Where-Object { $_.Enabled -eq "True" -and $_.Direction -eq "Inbound" -and $_.Action -eq "Allow" -and ($_.LocalPort -eq "3389" -or $_.LocalPort -eq "5985" -or $_.LocalPort -eq "5986") }
+        $rules = Get-NetFirewallRule | Where-Object { $_.Enabled -eq "True" -and $_.Direction -eq "Inbound" -and $_.Action -eq "Allow" -and ($_.LocalPort -in @("3389", "5985", "5986")) }
         if ($rules.Count -gt 0) {
-            Write-Host "Se encontraron $(@($rules).Count) reglas que serán eliminadas." -ForegroundColor Red
             $rules | Remove-NetFirewallRule -Confirm:$false
             Write-Host "Puertos cerrados exitosamente." -ForegroundColor Green
         } else {
-            Write-Host "No se encontraron reglas de firewall inseguras que eliminar." -ForegroundColor Green
+            Write-Host "No se encontraron reglas de firewall inseguras." -ForegroundColor Green
         }
     } catch {
-        Write-Host "Error al intentar cerrar los puertos. Asegúrese de tener permisos de Administrador." -ForegroundColor Red
+        Write-Host "Error al cerrar los puertos." -ForegroundColor Red
     }
 }
 
@@ -434,6 +413,7 @@ function Find-InactiveUsers {
         return $null
     }
 }
+
 
 function Verify-FileSignatures {
     Write-Host "Verificando firmas de archivos en rutas críticas... (Esto puede tardar unos minutos)" -ForegroundColor Yellow
@@ -1146,6 +1126,67 @@ function Generate-HTMLReport {
     }
 }
 
+function GetData-FirewallRules {
+    try {
+        return Get-NetFirewallRule | Where-Object { $_.Enabled -eq "True" -and $_.Direction -eq "Inbound" -and $_.Action -eq "Allow" -and ($_.LocalPort -in @("3389", "5985", "5986")) }
+    } catch {
+        return @()
+    }
+}
+
+function GetData-RegistryAutorun {
+    $autorunPaths = @(
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce",
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce"
+    )
+    $suspiciousEntries = @()
+    $excludedPrograms = @("discord", "spotify", "riotgames", "steam", "epicgames", "zoom", "microsoft", "google", "brave", "opera", "teams")
+
+    foreach ($path in $autorunPaths) {
+        try {
+            $keys = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue
+            if ($keys) {
+                $keys.PSObject.Properties | ForEach-Object {
+                    $prop = $_
+                    if ($prop.Name -notin @("PSPath", "PSDrive", "PSProvider", "PSParentPath")) {
+                        $propValue = $prop.Value.ToLower()
+                        $isSystemOrCommonPath = $propValue.StartsWith("c:\windows") -or $propValue.StartsWith("c:\program files") -or $propValue.StartsWith("c:\programdata")
+                        $isExcluded = $false
+                        foreach ($excluded in $excludedPrograms) {
+                            if ($propValue -like "*$($excluded)*") { $isExcluded = $true; break }
+                        }
+                        if (-not $isSystemOrCommonPath -and -not $isExcluded) {
+                            $suspiciousEntries += [PSCustomObject]@{
+                                "Clave" = $prop.Name; "Ruta" = $prop.Value; "Ubicación" = $path
+                            }
+                        }
+                    }
+                }
+            }
+        } catch {}
+    }
+    return $suspiciousEntries
+}
+
+function GetData-UnsignedFiles {
+    $criticalPaths = @("$env:SystemRoot\System32", "$env:ProgramFiles", "$env:ProgramFiles(x86)")
+    $unsignedFiles = @()
+    foreach ($path in $criticalPaths) {
+        try {
+            $files = Get-ChildItem -Path $path -Recurse -File -Include "*.exe", "*.dll" -ErrorAction SilentlyContinue
+            foreach ($file in $files) {
+                $signature = Get-SafeAuthenticodeSignature -Path $file.FullName
+                if ($signature.Status -ne "Valid") {
+                    $unsignedFiles += $file
+                }
+            }
+        } catch { }
+    }
+    return $unsignedFiles
+}
+
 # Nueva función para capturar el estado inicial
 function Capture-InitialState {
     Write-Host "Capturando estado inicial del sistema para el reporte..." -ForegroundColor Cyan
@@ -1214,85 +1255,89 @@ function Get-RandomMacAddr {
 }
 
 function MacChangerMenu {
-    Write-Host "--- Menú de Mac Changer ---" -ForegroundColor Cyan
+    Write-Host "`n--- Menú de Mac Changer ---" -ForegroundColor Cyan
     $adapters = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }
     if ($adapters.Count -eq 0) {
         Write-Host "No se encontraron adaptadores de red activos." -ForegroundColor Red
         return
     }
+    
     Write-Host "Adaptadores de red disponibles:"
     for ($i = 0; $i -lt $adapters.Count; $i++) {
-        Write-Host "$($i + 1). $($adapters[$i].Name)"
+        Write-Host "$($i + 1). $($adapters[$i].Name) - $($adapters[$i].InterfaceDescription)"
     }
     Write-Host "0. Volver al menú principal"
     $selection = Read-Host "Seleccione un adaptador"
     
-    if ($selection -eq "0") {
-        return
-    }
+    if ($selection -eq "0") { return }
     
-    $adapterIndex = [int]$selection - 1
-    if ($adapterIndex -ge 0 -and $adapterIndex -lt $adapters.Count) {
-        $global:AdapterName = $adapters[$adapterIndex].Name
-        
-        Write-Host "`nOpciones para '$($global:AdapterName)':"
-        Write-Host "1. Cambiar MAC por una aleatoria"
-        Write-Host "2. Restaurar MAC original"
-        Write-Host "0. Volver al menú anterior"
-        
-        $macOption = Read-Host "Seleccione una opción"
-        
-        switch ($macOption) {
-            "1" {
-                $newMac = Get-RandomMacAddr
-                Set-MacAddress -AdapterName $global:AdapterName -NewMacAddress $newMac
+    try {
+        $adapterIndex = [int]$selection - 1
+        if ($adapterIndex -ge 0 -and $adapterIndex -lt $adapters.Count) {
+            $selectedAdapter = $adapters[$adapterIndex]
+            
+            Write-Host "`nOpciones para '$($selectedAdapter.Name)':"
+            Write-Host "1. Cambiar MAC por una aleatoria"
+            Write-Host "2. Restaurar MAC original"
+            Write-Host "0. Volver"
+            
+            $macOption = Read-Host "Seleccione una opción"
+            
+            switch ($macOption) {
+                "1" {
+                    $newMac = Get-RandomMacAddr
+                    Set-MacAddress -AdapterName $selectedAdapter.Name -AdapterGuid $selectedAdapter.InterfaceGuid -NewMacAddress $newMac
+                }
+                "2" {
+                    Set-MacAddress -AdapterName $selectedAdapter.Name -AdapterGuid $selectedAdapter.InterfaceGuid -NewMacAddress $null
+                }
+                "0" {}
+                default { Write-Host "Opción no válida." -ForegroundColor Red }
             }
-            "2" {
-                Set-MacAddress -AdapterName $global:AdapterName -NewMacAddress $null
-            }
-            "0" {
-                MacChangerMenu
-            }
-            default {
-                Write-Host "Opción no válida." -ForegroundColor Red
-            }
+        } else {
+            Write-Host "Selección no válida." -ForegroundColor Red
         }
-    } else {
-        Write-Host "Selección no válida." -ForegroundColor Red
+    } catch {
+        Write-Host "Entrada no válida. Por favor, ingrese un número." -ForegroundColor Red
     }
 }
 
 function Set-MacAddress {
     param(
         [string]$AdapterName,
+        [string]$AdapterGuid,
         [string]$NewMacAddress
     )
     
     try {
         $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}"
-        # Corrección: Buscar por DriverDesc en lugar de PSPath
-        $adapterKey = Get-ChildItem -Path $regPath -Recurse | Where-Object { (Get-ItemProperty -Path $_.PSPath).DriverDesc -eq $AdapterName } | Select-Object -First 1
         
-        if (-not $adapterKey) {
-            Write-Host "No se encontró el adaptador de red en el registro." -ForegroundColor Red
+        # Encontrar la clave de registro correcta usando el GUID del adaptador
+        $adapterKeyPath = (Get-ChildItem -Path $regPath -ErrorAction SilentlyContinue | Where-Object {
+            (Get-ItemProperty -Path $_.PSPath -Name "NetCfgInstanceId" -ErrorAction SilentlyContinue).NetCfgInstanceId -eq $AdapterGuid
+        }).PSPath
+
+        if (-not $adapterKeyPath) {
+            Write-Host "No se encontró el adaptador de red en el registro para el GUID: $AdapterGuid" -ForegroundColor Red
             return
         }
         
-        $adapterPath = $adapterKey.PSPath
-        
         if ($NewMacAddress) {
-            Set-ItemProperty -Path $adapterPath -Name "NetworkAddress" -Value $NewMacAddress -Type String -Force
+            # La MAC en el registro no debe tener separadores
+            $cleanMac = $NewMacAddress -replace '[:-]'
+            Set-ItemProperty -Path $adapterKeyPath -Name "NetworkAddress" -Value $cleanMac -Type String -Force
             Write-Host "La dirección MAC de '$AdapterName' se cambió a $NewMacAddress" -ForegroundColor Green
         } else {
-            Remove-ItemProperty -Path $adapterPath -Name "NetworkAddress" -ErrorAction SilentlyContinue
+            Remove-ItemProperty -Path $adapterKeyPath -Name "NetworkAddress" -ErrorAction SilentlyContinue
             Write-Host "La dirección MAC de '$AdapterName' ha sido restaurada a su valor original." -ForegroundColor Green
         }
         
+        Write-Host "Reiniciando el adaptador..." -ForegroundColor Cyan
         Restart-NetAdapter -Name $AdapterName -Confirm:$false
         Write-Host "Adaptador reiniciado." -ForegroundColor Green
     } catch {
         Write-Host "Error al cambiar la dirección MAC. Asegúrese de tener permisos de Administrador." -ForegroundColor Red
-        Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Detalles: $($_.Exception.Message)" -ForegroundColor Red
     }
 }
 
@@ -1746,38 +1791,3 @@ while ($true) {
         Read-Host | Out-Null
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
