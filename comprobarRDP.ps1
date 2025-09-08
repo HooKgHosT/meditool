@@ -134,37 +134,33 @@ function Get-FirewallStatus {
 
     try {
         # Obtenemos todas las reglas de firewall activas que permiten conexiones de entrada.
+        # Filtramos para mostrar solo las que tienen un programa asociado para mayor relevancia.
         $allRules = Get-NetFirewallRule | Where-Object { 
-            $_.Enabled -eq "True" -and ($_.Direction -eq "Inbound" -or $_.Direction -eq "Both") -and ($_.Action -eq "Allow") 
+            $_.Enabled -eq "True" -and ($_.Direction -eq "Inbound" -or $_.Direction -eq "Both") -and ($_.Action -eq "Allow") -and -not [string]::IsNullOrEmpty($_.ProgramName)
         }
 
         if ($allRules.Count -gt 0) {
             Write-Host "Se encontraron las siguientes reglas de firewall:" -ForegroundColor Green
 
-            # Se usa ForEach-Object para procesar cada regla individualmente
-            $allRules | Select-Object @{Name="Regla"; Expression={
-                $ruleName = $_.DisplayName
-                if ($ruleName.Length -gt 10) {
-                    $ruleName.Substring(0, 7) + "..."
-                } else {
-                    $ruleName
+            # Se usa ForEach-Object para procesar cada regla y formatear la salida en una sola linea.
+            $allRules | ForEach-Object {
+                $rule = $_
+                $displayName = $rule.DisplayName
+                
+                # Truncar DisplayName a un maximo de 25 caracteres para mantener la legibilidad.
+                if ($displayName.Length -gt 25) {
+                    $displayName = $displayName.Substring(0, 22) + "..."
                 }
-            }}, @{Name="Protocolo"; Expression={$_.Protocol}},
-            @{Name="Puerto"; Expression={$_.LocalPort}},
-            @{Name="Programa"; Expression={
-                $program = $_.ProgramName
-                if ([string]::IsNullOrEmpty($program)) {
-                    "N/A"
-                } else {
-                    $fileName = Split-Path -Path $program -Leaf
-                    if ($fileName.Length -gt 15) {
-                        $fileName.Substring(0, 12) + "..."
-                    } else {
-                        $fileName
-                    }
-                }
-            }} | Format-Table -AutoSize
-            
+
+                $programName = Split-Path -Path $rule.ProgramName -Leaf
+
+                # Formato de salida mejorado
+                Write-Host "Regla: $displayName" -ForegroundColor White
+                Write-Host "  - Programa: $programName" -ForegroundColor Cyan
+                Write-Host "  - Protocolo: $($rule.Protocol)" -ForegroundColor Cyan
+                Write-Host "  - Puerto: $($rule.LocalPort)" -ForegroundColor Cyan
+                Write-Host "--------------------------------"
+            }
         } else {
             Write-Host "No se encontraron reglas de firewall que permitan conexiones entrantes." -ForegroundColor Green
         }
@@ -173,6 +169,7 @@ function Get-FirewallStatus {
         Write-Host "Error al obtener las reglas del Firewall. Verifique si el comando se ejecuto con privilegios de Administrador y reintente." -ForegroundColor Red
     }
 }
+
 function Fix-FirewallPorts {
     Write-Host "Cerrando puertos abiertos no seguros..." -ForegroundColor Yellow
     try {
@@ -1406,6 +1403,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
