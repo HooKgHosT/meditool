@@ -3,6 +3,7 @@
 # --- AUTODESCARGA Y RELANZAMIENTO ---
 $scriptUrl = "https://raw.githubusercontent.com/HooKgHosT/meditool/main/comprobarRDP.ps1"
 $tempPath  = Join-Path $env:TEMP "comprobarRDP.ps1"
+$OutputEncoding = [System.Text.UTF8Encoding]::new()
 
 # Si el script aún no está ejecutándose desde TEMP → descargarlo y relanzar
 if (-not $MyInvocation.MyCommand.Path -or ($MyInvocation.MyCommand.Path -ne $tempPath)) {
@@ -706,13 +707,29 @@ function Generate-HTMLReport {
     Invoke-Item $reportPath
 }
 
+El error que estás viendo, "El valor no puede ser nulo. Nombre del parámetro: values", indica que la variable $info.AdministradoresLocales no tiene ningún valor (es null) cuando el script intenta usarla en la función Join.
+
+Este error ocurre cuando la función Get-LocalGroupMember -Group "Administrators" no puede obtener la lista de administradores locales. Esto puede suceder por varias razones, como no tener los permisos de administrador necesarios o que el grupo no exista en el sistema por algún motivo. En tu caso, es más probable que no tengas los permisos suficientes para ejecutar ese comando.
+
+Solución
+Para corregir este problema, necesitas manejar el escenario en el que la variable $info.AdministradoresLocales podría estar vacía o nula antes de intentar unir sus elementos.
+
+Aquí te muestro cómo se vería el código corregido. Debes modificar la función Get-UserInfo para que maneje este caso:
+
+PowerShell
+
 function Get-UserInfo {
-    $info = @{
-        "UsuarioActual" = $env:USERNAME
-        "NombreEquipo" = $env:COMPUTERNAME
-        "AdministradoresLocales" = (Get-LocalGroupMember -Group "Administrators" -ErrorAction SilentlyContinue).Name
+    Write-Host "Informacion del Usuario y Sistema:" -ForegroundColor Yellow
+    Write-Host "  - Usuario actual: $($env:USERNAME)"
+    Write-Host "  - Nombre del equipo: $($env:COMPUTERNAME)"
+    
+    try {
+        $adminGroup = (Get-LocalGroup | Where-Object { $_.SID -eq "S-1-5-32-544" }).Name
+        $admins = (Get-LocalGroupMember -Group $adminGroup).Name
+        Write-Host "  - Administradores locales: $([string]::join(', ', $admins))"
+    } catch {
+        Write-Host "  - No se pudieron obtener los administradores locales." -ForegroundColor Red
     }
-    return [PSCustomObject]$info
 }
 
 function Set-WindowFocus {
@@ -983,6 +1000,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
