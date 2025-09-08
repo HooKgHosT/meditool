@@ -414,21 +414,33 @@ function Find-UnsignedProcesses {
 }
 
 function Stop-SuspiciousProcess {
+    Write-Host "`nDeteniendo procesos sospechosos..." -ForegroundColor Yellow
     $processes = Find-UnsignedProcesses
+    
     if ($processes.Count -eq 0) {
         Write-Host "No se encontraron procesos sin firma para detener." -ForegroundColor Green
         return
     }
+    
+    Write-Host "Se encontraron los siguientes procesos sin firma digital:" -ForegroundColor Red
     $processes | Select-Object ProcessName, Path, ID, StartTime | Format-Table -AutoSize
-    Write-Host "Ingrese el PID del proceso que desea detener:" -ForegroundColor Cyan
-    $pidToStop = Read-Host "PID"
+    
+    Write-Host "`nIngrese el PID del proceso que desea detener o presione '0' para volver al menú principal:" -ForegroundColor Cyan
+    $pidToStop = Read-Host "PID del proceso"
+    
+    if ($pidToStop -eq "0") {
+        Write-Host "Operación cancelada." -ForegroundColor Yellow
+        return
+    }
+    
     try {
-        Stop-Process -Id $pidToStop -Force
+        Stop-Process -Id $pidToStop -Force -ErrorAction Stop
         Write-Host "Proceso con PID $pidToStop detenido exitosamente." -ForegroundColor Green
     } catch {
         Write-Host "No se pudo detener el proceso. Verifique el PID y los permisos de Administrador." -ForegroundColor Red
     }
 }
+
 function Block-FileExecution {
     param(
         [string]$FileToBlock
@@ -1256,4 +1268,5 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
