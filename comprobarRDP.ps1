@@ -966,28 +966,23 @@ function Audit-FailedLogons {
     $lastDay = (Get-Date).AddDays(-1)
     
     try {
-        # Se usa un filtro mas especifico para evitar errores en Get-WinEvent
+        # Se obtiene el registro de eventos de forma segura, sin detener la ejecucion si no se encuentran eventos.
         $failedLogons = Get-WinEvent -FilterHashtable @{ 
             Logname = 'Security'; 
             Id = 4625; 
             StartTime = $lastDay 
-        } -ErrorAction Stop
+        } | Select-Object TimeCreated, @{ Name = 'Usuario'; Expression = { $_.Properties[5].Value } }, @{ Name = 'Origen'; Expression = { $_.Properties[18].Value } }
         
-        if ($failedLogons) {
+        if ($failedLogons.Count -gt 0) {
             Write-Host "Se encontraron los siguientes intentos de inicio de sesion fallidos:" -ForegroundColor Red
-            $failedLogons | Select-Object TimeCreated, @{ Name = 'Usuario'; Expression = { $_.Properties[5].Value } }, @{ Name = 'Origen'; Expression = { $_.Properties[18].Value } } |
-            Format-Table -AutoSize
+            $failedLogons | Format-Table -AutoSize
         } else {
             Write-Host "No se encontraron intentos de inicio de sesion fallidos en las ultimas 24 horas." -ForegroundColor Green
         }
         
     } catch {
-        if ($_.Exception.Message -like "*No se encontraron eventos*") {
-            Write-Host "No se encontraron intentos de inicio de sesion fallidos en las ultimas 24 horas." -ForegroundColor Green
-        } else {
-            Write-Host "Error al acceder al registro de eventos de seguridad. Verifique que su cuenta tiene los privilegios de seguridad necesarios." -ForegroundColor Red
-            Write-Host "Detalles del error: $($_.Exception.Message)" -ForegroundColor Red
-        }
+        Write-Host "Error al acceder al registro de eventos. Verifique que su cuenta tiene los privilegios de seguridad necesarios." -ForegroundColor Red
+        Write-Host "Detalles del error: $($_.Exception.Message)" -ForegroundColor Red
     }
 }
 
@@ -1147,14 +1142,27 @@ function Generate-HTMLReport {
 }
 
 function Get-UserInfo {
-    $adminMembers = @()
+    # Información del usuario y sistema
+    Write-Host "Informacion del Usuario y Sistema:" -ForegroundColor Yellow
+    Write-Host "  - Usuario actual: $($env:USERNAME)"
+    Write-Host "  - Nombre del equipo: $($env:COMPUTERNAME)"
+
+    # Obtener administradores locales de forma fiable usando el SID
+    Write-Host "`nInformacion de Administradores Locales:" -ForegroundColor Cyan
     try {
         $adminGroup = (Get-LocalGroup | Where-Object { $_.SID -eq "S-1-5-32-544" }).Name
         if ($adminGroup) {
-            $adminMembers = (Get-LocalGroupMember -Group $adminGroup -ErrorAction Stop).Name
+            $admins = (Get-LocalGroupMember -Group $adminGroup -ErrorAction Stop).Name
+            Write-Host "  - Administradores locales: $([string]::join(', ', $admins))"
+        } else {
+            Write-Host "  - No se pudo encontrar el grupo de administradores locales." -ForegroundColor Red
         }
-    } catch {}
+    } catch {
+        Write-Host "  - No se pudieron obtener los administradores locales. Asegurese de tener permisos de Administrador." -ForegroundColor Red
+    }
     
+    # Obtener informacion de la red y los adaptadores
+    Write-Host "`nInformacion de Adaptadores de Red:" -ForegroundColor Cyan
     $networkAdapters = @()
     try {
         $adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' -and $_.Virtual -eq $false }
@@ -1170,16 +1178,20 @@ function Get-UserInfo {
                     "Subred" = if ($ipAddress) { $ipAddress.PrefixLength } else { "N/A" }
                 }
             }
+            if ($networkAdapters.Count -gt 0) {
+                $networkAdapters | Format-Table -AutoSize
+            } else {
+                Write-Host "  - No se encontraron adaptadores de red fisicos activos." -ForegroundColor Red
+            }
+        } else {
+            Write-Host "  - No se encontraron adaptadores de red fisicos activos." -ForegroundColor Red
         }
-    } catch {}
-
-    $info = [PSCustomObject]@{
-        "UsuarioActual" = $env:USERNAME
-        "NombreEquipo" = $env:COMPUTERNAME
-        "AdministradoresLocales" = $adminMembers
-        "Redes" = $networkAdapters
+    } catch {
+        Write-Host "Error al obtener informacion de los adaptadores de red." -ForegroundColor Red
     }
-    return $info
+
+    Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+    Read-Host | Out-Null
 }
 
 function Set-WindowFocus {
@@ -1556,6 +1568,7 @@ while ($true) {
 }
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
