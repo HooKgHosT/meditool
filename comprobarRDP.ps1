@@ -1,5 +1,7 @@
 # Este script esta disenado como una herramienta de seguridad (Blue Team)
 # para la verificacion y correccion de vulnerabilidades comunes en sistemas Windows 10 y 11.
+# Script version 1.0.0
+
 # --- Lógica de autodescarga, elevación de permisos y limpieza ---
 $scriptName = "meditool.ps1"
 $scriptUrl = "https://raw.githubusercontent.com/HooKgHosT/meditool/main/meditool.ps1"
@@ -16,15 +18,11 @@ function Test-AdminPrivileges {
 if ($MyInvocation.MyCommand.Path -ne $tempPath -and -not (Test-AdminPrivileges)) {
     try {
         Write-Host "Iniciando la descarga del script temporal..." -ForegroundColor Yellow
-        # Descarga el script de GitHub y lo guarda en la carpeta temporal.
-        # Usa -Force para reemplazarlo si ya existe.
         Invoke-WebRequest -Uri $scriptUrl -OutFile $tempPath -UseBasicParsing -ErrorAction Stop
-
         Write-Host "Descargado en: $tempPath" -ForegroundColor Cyan
         
-        # Relanza el script desde la ruta temporal con permisos de Administrador.
         Start-Process powershell -ArgumentList "-NoExit -ExecutionPolicy Bypass -File `"$tempPath`"" -Verb RunAs
-        exit # Salir de la instancia actual para evitar el bucle.
+        exit
     } catch {
         Write-Host "Error al descargar o relanzar el script: $($_.Exception.Message)" -ForegroundColor Red
         Write-Host "Asegurese de tener conexion a Internet y de que el link sea correcto." -ForegroundColor Red
@@ -32,7 +30,6 @@ if ($MyInvocation.MyCommand.Path -ne $tempPath -and -not (Test-AdminPrivileges))
     }
 }
 
-# La ejecucion continuara aqui solo si el script ya se ha relanzado con permisos.
 if (Test-AdminPrivileges) {
     Write-Host "El script se esta ejecutando con permisos de Administrador." -ForegroundColor Green
 }
@@ -40,33 +37,6 @@ if (Test-AdminPrivileges) {
 # Variables globales para el MAC Changer
 $global:AdapterName = $null
 # Cambiar la codificacion para que se muestren los caracteres especiales correctamente
-$OutputEncoding = [System.Text.UTF8Encoding]::new()
-
-# --- Funciones de seguridad ---
-
-function Get-SafeAuthenticodeSignature {
-    param(
-        [string]$Path
-    )
-    try {
-        if (Test-Path -Path $Path -PathType Leaf) {
-            $signature = Get-AuthenticodeSignature -LiteralPath $Path -ErrorAction Stop
-            return $signature
-        }
-    } catch {
-        return [PSCustomObject]@{ Status = "Unknown" }
-    }
-}
-
-# Variables globales para el MAC Changer
-$global:AdapterName = $null
-# Cambiar la codificacion para que se muestren las tildes y la n correctamente
-$OutputEncoding = [System.Text.UTF8Encoding]::new()
-
-
-# Variables globales para el MAC Changer
-$global:AdapterName = $null
-# Cambiar la codificacion para que se muestren las tildes y la n correctamente
 $OutputEncoding = [System.Text.UTF8Encoding]::new()
 
 # --- Funciones de seguridad ---
@@ -212,7 +182,6 @@ function Stop-OrBlock-Process {
             Stop-Process -Id $pid -Force
             Write-Host "Proceso '$programName' con PID $pid cerrado exitosamente." -ForegroundColor Green
         } elseif ($action -eq "block") {
-            # Bloquear el trafico de salida (outbound) para el programa.
             $ruleName = "Bloqueado por MediTool - $programName"
             $existingRule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
             
@@ -346,23 +315,6 @@ function Find-MaliciousScheduledTasks {
         return $null
     }
 }
-
-Ya veo, te gustaría que la gestión de servicios esté dentro del menú 7. Es un excelente punto, ya que hace que la funcionalidad sea más accesible y coherente con la auditoría de servicios no esenciales.
-
-He integrado la gestión de servicios en el menú 7. Ahora, el script hará lo siguiente:
-
-Ejecutar el análisis de servicios no esenciales.
-
-Si se encuentran servicios en ejecución, el script mostrará un menú adicional con opciones para gestionarlos.
-
-El usuario podrá seleccionar una acción (iniciar, detener, deshabilitar, eliminar) y aplicarla a un servicio específico de la lista.
-
-Este enfoque crea un flujo de trabajo lógico y útil para la gestión de servicios.
-
-Código Actualizado
-Aquí tienes la versión completa y corregida del código. Reemplaza las funciones Audit-NonEssentialServices y Show-MainMenu en tu script. Ya no necesitas la función Manage-Service por separado, ya que he integrado su lógica directamente.
-
-PowerShell
 
 function Audit-NonEssentialServices {
     $shouldContinue = $true
@@ -664,11 +616,11 @@ function Find-RegistryAutorun {
                     if ($prop.Name -ne "PSPath" -and $prop.Name -ne "PSDrive" -and $prop.Name -ne "PSProvider" -and $prop.Name -ne "PSParentPath") {
                         $propValue = $prop.Value.ToLower()
                         
-                        # Usa una lógica de exclusión más robusta
+                        # Usa una logica de exclusion mas robusta
                         $isSystemOrCommonPath = $propValue.StartsWith("c:\windows") -or
-                                                $propValue.StartsWith("c:\program files") -or
-                                                $propValue.StartsWith("c:\program files (x86)") -or
-                                                $propValue.StartsWith("c:\programdata")
+                                                 $propValue.StartsWith("c:\program files") -or
+                                                 $propValue.StartsWith("c:\program files (x86)") -or
+                                                 $propValue.StartsWith("c:\programdata")
 
                         $isExcluded = $false
                         foreach ($excluded in $excludedPrograms) {
@@ -1183,11 +1135,6 @@ function Set-WindowFocus {
     $showWindow::ShowWindow($hwnd, 9) | Out-Null
 }
 
-function Test-AdminPrivileges {
-    $current = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-    return $current.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-}
-
 function Get-RandomMacAddr {
     $bytes = New-Object byte[] 5
     (New-Object System.Security.Cryptography.RNGCryptoServiceProvider).GetBytes($bytes)
@@ -1269,7 +1216,6 @@ function Set-MacAddress {
             Write-Host "La direccion MAC de '$AdapterName' ha sido restaurada a su valor original." -ForegroundColor Green
         }
         
-        # Reiniciar el adaptador de red para aplicar los cambios
         Restart-NetAdapter -Name $AdapterName -Confirm:$false
         Write-Host "Adaptador reiniciado." -ForegroundColor Green
     } catch {
@@ -1361,7 +1307,7 @@ function Show-MainMenu {
     Clear-Host
     Write-Host "=============================================" -ForegroundColor Green
     Write-Host "=                                           =" -ForegroundColor Green
-    Write-Host "=    Herramienta de Seguridad MediTool      =" -ForegroundColor Green
+    Write-Host "=         Herramienta de Seguridad MediTool =" -ForegroundColor Green
     Write-Host "=                                           =" -ForegroundColor Green
     Write-Host "=============================================" -ForegroundColor Green
     Write-Host "Bienvenido a MediTool, tu solucion de seguridad Blue Team."
@@ -1375,7 +1321,7 @@ function Show-MainMenu {
         [PSCustomObject]@{ "ID" = 4; "Opcion" = "Administrar el servicio de RDP"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 5; "Opcion" = "Administrar la Telemetria de Windows"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 6; "Opcion" = "Buscar Tareas Programadas Maliciosas"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 7; "Opcion" = "Auditar Servicios No Esenciales"; "Estado" = "N/A" },        
+        [PSCustomObject]@{ "ID" = 7; "Opcion" = "Auditar Servicios No Esenciales"; "Estado" = "N/A" },     
         [PSCustomObject]@{ "ID" = 8; "Opcion" = "Buscar Cuentas de Usuario Inactivas"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 9; "Opcion" = "Verificar Firmas de Archivos Criticos"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 10; "Opcion" = "Verificar Procesos en Ejecucion sin Firma"; "Estado" = "N/A" },
@@ -1517,6 +1463,7 @@ function Show-MainMenu {
             Write-Host "Opcion no valida. Por favor, intente de nuevo." -ForegroundColor Red
         }
     }
+}
 
 # Iniciar el bucle del menu
 while ($true) {
@@ -1525,24 +1472,3 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
