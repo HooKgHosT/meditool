@@ -1,6 +1,6 @@
 # Este script está diseñado como una herramienta de seguridad (Blue Team)
 # para la verificación y corrección de vulnerabilidades comunes en sistemas Windows 10 y 11.
-# Script version 1.3.0 (Audit-Focused)
+# Script version 1.4.0 (Fast Menu)
 
 # --- Lógica de autodescarga, elevación de permisos y limpieza ---
 $scriptName = "meditool.ps1"
@@ -645,13 +645,16 @@ function Activate-Windows {
 }
 
 function Generate-HTMLReport {
+    if ($null -eq $global:InitialSystemState) {
+        Write-Host "Primero se debe realizar un análisis completo (Opción 27)." -ForegroundColor Yellow
+        Write-Host "Iniciando análisis ahora. Esto puede tardar varios minutos..." -ForegroundColor Yellow
+        Capture-InitialState
+    }
+    
     Add-LogEntry -Message "Generando reporte de seguridad en HTML."
     Write-Host "Generando reporte de seguridad..." -ForegroundColor Yellow
-    
-    if ($null -eq $global:InitialSystemState) { Capture-InitialState }
     $reportData = $global:InitialSystemState
     
-    # Usar ConvertTo-Html para una generación de reportes más robusta y simple
     $head = @"
 <style>
 body { font-family: 'Segoe UI', sans-serif; margin: 2em; background-color: #f4f4f9; color: #333; }
@@ -713,6 +716,7 @@ function GetData-RegistryAutorun {
 }
 
 function GetData-UnsignedFiles {
+    Write-Host "Analizando firmas de archivos críticos... (Esto es lento)" -ForegroundColor Cyan
     $criticalPaths = @("$env:SystemRoot\System32", "$env:ProgramFiles", "$env:ProgramFiles(x86)")
     $unsignedFiles = @()
     foreach ($path in $criticalPaths) {
@@ -890,6 +894,7 @@ function Show-MainMenu {
         [PSCustomObject]@{ "ID" = 24; "Opcion" = "Limpiar Archivos Basura del Sistema" },
         [PSCustomObject]@{ "ID" = 25; "Opcion" = "Buscar Archivos de 0 Bytes" },
         [PSCustomObject]@{ "ID" = 26; "Opcion" = "Analizar Memoria del Sistema" },
+        [PSCustomObject]@{ "ID" = 27; "Opcion" = "Realizar Análisis Completo del Sistema (Necesario para Reporte)" },
         [PSCustomObject]@{ "ID" = 0; "Opcion" = "Salir" }
     )
     
@@ -901,7 +906,8 @@ function Show-MainMenu {
 
 # --- INICIO DEL SCRIPT Y BUCLE PRINCIPAL ---
 
-Capture-InitialState
+# El script ahora inicia directamente en el menú.
+# La función Capture-InitialState se llama desde la Opción 27 o desde la 19 (Reporte).
 
 while ($true) {
     $selection = Show-MainMenu
@@ -955,6 +961,11 @@ while ($true) {
         "24" { Clean-SystemJunk }
         "25" { Find-OrphanedAndZeroByteFiles }
         "26" { Analyze-SystemMemory }
+        "27" {
+            Write-Host "Iniciando análisis completo del sistema. Esto puede tardar varios minutos..." -ForegroundColor Yellow
+            Capture-InitialState
+            Write-Host "Análisis completo y captura de estado finalizados." -ForegroundColor Green
+        }
         "0" {
             Clean-TempFolder
             Write-Host "Saliendo..." -ForegroundColor Green
