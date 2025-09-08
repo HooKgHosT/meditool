@@ -1153,8 +1153,7 @@ Write-Host "
 % 	  ______   ______  ______  ______   ______  ______  ______    ______  
 % 	 | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
 % 	 |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
-% 	 |______| |______||______||______| |______||______||______|  |______|
-" -ForegroundColor Cyan
+% 	 |______| |______||______||______| |______||______||______|  |______|" -ForegroundColor Cyan
     Write-Host "Bienvenido a MediTool, tu solución de seguridad Blue Team."
     Write-Host "Por favor, selecciona una opción del menú:"
     Write-Host ""
@@ -1340,5 +1339,6 @@ Write-Host "
     Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
     Read-Host | Out-Null
 }
+
 
 
