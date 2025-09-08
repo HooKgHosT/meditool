@@ -1025,29 +1025,30 @@ function Generate-HTMLReport {
     Add-LogEntry -Message "Generando reporte de seguridad en HTML."
     Write-Host "Generando reporte de seguridad..." -ForegroundColor Yellow
     
-    # Si el estado inicial no se ha capturado, se captura ahora.
+    # Asegura que el estado inicial haya sido capturado.
     if ($null -eq $global:InitialSystemState) {
-        Write-Host "Capturando estado inicial del sistema para el reporte..." -ForegroundColor Cyan
         Capture-InitialState
     }
 
     $reportData = $global:InitialSystemState
     
-    # --- Construcción del HTML ---
+    # --- Construcción del String HTML ---
     $html = @"
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
+<meta charset="UTF-8">
 <title>Reporte de Seguridad - MediTool</title>
 <style>
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 2em; background-color: #f4f4f9; color: #333; font-size: 12pt; }
     .container { max-width: 1200px; margin: auto; background: #fff; padding: 2em; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
     h1, h2, h3 { color: #2a2a72; border-bottom: 2px solid #2a2a72; padding-bottom: 0.5em; }
     table { width: 100%; border-collapse: collapse; margin-top: 1em; }
-    th, td { text-align: left; padding: 10px; border: 1px solid #ddd; word-break: break-all; }
+    th, td { text-align: left; padding: 10px; border: 1px solid #ddd; word-break: break-word; }
     th { background-color: #4a4a8c; color: white; }
     .status-danger { color: #d9534f; font-weight: bold; }
     .log-table th:first-child { width: 180px; }
+    p { line-height: 1.6; }
 </style>
 </head>
 <body>
@@ -1061,8 +1062,19 @@ function Generate-HTMLReport {
         <p><strong>Estado RDP:</strong> $($reportData.EstadoRDP)</p>
         <p><strong>Estado Telemetría:</strong> $($reportData.EstadoTelemetria)</p>
 
-        <h3>Tareas Programadas Sospechosas (Estado Inicial)</h3>
+        <h3>Reglas de Firewall Inseguras (Estado Inicial)</h3>
 "@
+    if ($reportData.ReglasFirewallInseguras.Count -gt 0) {
+        $html += "<table><thead><tr><th>Nombre</th><th>Protocolo</th><th>Puerto Local</th><th>Programa</th></tr></thead><tbody>"
+        $reportData.ReglasFirewallInseguras | ForEach-Object {
+            $html += "<tr class='status-danger'><td>$($_.DisplayName)</td><td>$($_.Protocol)</td><td>$($_.LocalPort)</td><td>$($_.Program)</td></tr>"
+        }
+        $html += "</tbody></table>"
+    } else {
+        $html += "<p>No se encontraron reglas de firewall inseguras en el análisis inicial.</p>"
+    }
+
+    $html += "<h3>Tareas Programadas Sospechosas (Estado Inicial)</h3>"
     if ($reportData.TareasProgramadasSospechosas.Count -gt 0) {
         $html += "<table><thead><tr><th>Nombre</th><th>Estado</th><th>Ruta</th><th>Acción</th></tr></thead><tbody>"
         $reportData.TareasProgramadasSospechosas | ForEach-Object {
@@ -1084,6 +1096,28 @@ function Generate-HTMLReport {
         $html += "<p>No se encontraron procesos sin firma en el análisis inicial.</p>"
     }
 
+    $html += "<h3>Archivos Críticos sin Firma (Estado Inicial)</h3>"
+    if ($reportData.ArchivosSinFirmaCriticos.Count -gt 0) {
+        $html += "<table><thead><tr><th>Nombre</th><th>Directorio</th><th>Última Modificación</th></tr></thead><tbody>"
+        $reportData.ArchivosSinFirmaCriticos | ForEach-Object {
+            $html += "<tr class='status-danger'><td>$($_.Name)</td><td>$($_.DirectoryName)</td><td>$($_.LastWriteTime)</td></tr>"
+        }
+        $html += "</tbody></table>"
+    } else {
+        $html += "<p>No se encontraron archivos críticos sin firma en el análisis inicial.</p>"
+    }
+
+    $html += "<h3>Entradas de Autorun Sospechosas (Estado Inicial)</h3>"
+    if ($reportData.EntradasAutorunSospechosas.Count -gt 0) {
+        $html += "<table><thead><tr><th>Clave</th><th>Ruta</th><th>Ubicación Registro</th></tr></thead><tbody>"
+        $reportData.EntradasAutorunSospechosas | ForEach-Object {
+            $html += "<tr class='status-danger'><td>$($_.Clave)</td><td>$($_.Ruta)</td><td>$($_.Ubicacion)</td></tr>"
+        }
+        $html += "</tbody></table>"
+    } else {
+        $html += "<p>No se encontraron entradas de inicio automático sospechosas en el análisis inicial.</p>"
+    }
+
     # --- Sección de Cambios Realizados ---
     $html += "<h2>Registro de Cambios y Acciones Realizadas</h2>"
     if ($global:ActionLog.Count -gt 0) {
@@ -1098,24 +1132,32 @@ function Generate-HTMLReport {
 
     $html += "</div></body></html>"
 
+    # --- Guardar y Abrir el Archivo HTML ---
     $desktopPath = [Environment]::GetFolderPath("Desktop")
     $reportPath = Join-Path -Path $desktopPath -ChildPath "Security_Report_$(Get-Date -Format 'yyyyMMdd_HHmmss').html"
     
-    $html | Out-File -FilePath $reportPath -Encoding utf8
-    
-    Write-Host "Reporte generado con éxito en: $reportPath" -ForegroundColor Green
-    Invoke-Item $reportPath
+    try {
+        $html | Out-File -FilePath $reportPath -Encoding utf8 -ErrorAction Stop
+        Write-Host "Reporte generado con éxito en: $reportPath" -ForegroundColor Green
+        Invoke-Item $reportPath
+    } catch {
+        Write-Host "Error al guardar el reporte en el escritorio: $($_.Exception.Message)" -ForegroundColor Red
+    }
 }
 
 # Nueva función para capturar el estado inicial
 function Capture-InitialState {
+    Write-Host "Capturando estado inicial del sistema para el reporte..." -ForegroundColor Cyan
     $global:InitialSystemState = [PSCustomObject]@{
         FechaAnalisis                 = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         InformacionSistema            = Get-UserInfo
         EstadoRDP                     = Get-RDPStatus
         EstadoTelemetria              = Get-TelemetryStatus
-        TareasProgramadasSospechosas  = Find-MaliciousScheduledTasks
-        ProcesosSinFirma              = Find-UnsignedProcesses
+        TareasProgramadasSospechosas  = Find-MaliciousScheduledTasks 
+        ProcesosSinFirma              = Find-UnsignedProcesses     
+        ArchivosSinFirmaCriticos      = GetData-UnsignedFiles      
+        EntradasAutorunSospechosas    = GetData-RegistryAutorun    
+        ReglasFirewallInseguras       = GetData-FirewallRules      
     }
     Add-LogEntry -Message "Se ha capturado el estado de configuración inicial del sistema."
 }
@@ -1702,6 +1744,7 @@ while ($true) {
         Read-Host | Out-Null
     }
 }
+
 
 
 
