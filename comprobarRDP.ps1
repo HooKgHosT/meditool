@@ -22,18 +22,18 @@ if (-not $MyInvocation.MyCommand.Path -or ($MyInvocation.MyCommand.Path -ne $tem
 
 # DIBUJO DE JERINGA ASCII HORIZONTAL
 Write-Host "
-%     ______   ______  ______  ______   ______  ______  ______    ______  
+%     	  ______   ______  ______  ______   ______  ______  ______    ______  
 %	 | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
 % 	 |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
 % 	 |______| |______||______||______| |______||______||______|  |______| 
-% 	  ______  						                              ______
+% 	  ______  				                      ______
 % 	 | |__| |   _  _   ____  ___   __  _____  ____   ____  _     | |__| | 
 % 	 |  ()  |  | \/ | |____||_  \ \__/|_ _ _| / _  \/ _  \| |    |  ()  | 
 % 	 |______|  | || | | _|  | |  | ||   | |  | |.| | |.|  | |    |______| 
 % 	  ______   | || | |__|_ |_|  | ||   | |  | |_| | |_|  | |_    ______
 % 	 | |__| |  |_||_| |____||___/ /__\  |_|   \____/\____/|___|  | |__| | 
-% 	 | () | | 						                             |  ()  | 
-% 	 |______| 						                             |______| 
+% 	 | () | | 				                     |  ()  | 
+% 	 |______| 					             |______| 
 % 	  ______   ______  ______  ______   ______  ______  ______    ______  
 % 	 | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
 % 	 |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
@@ -794,6 +794,7 @@ function Find-HiddenFilesAndScan {
     }
 }
 
+
 function Audit-FailedLogons {
     Write-Host "`nAuditando inicios de sesion fallidos de las últimas 24 horas..." -ForegroundColor Yellow
     $lastDay = (Get-Date).AddDays(-1)
@@ -1119,36 +1120,49 @@ function Update-AllWingetApps {
 # --- MENÚ PRINCIPAL ---
 function Show-MainMenu {
     Clear-Host
-    Write-Host "=============================================" -ForegroundColor Green
-    Write-Host "=                                           =" -ForegroundColor Green
-    Write-Host "=        Herramienta de Seguridad MediTool  =" -ForegroundColor Green
-    Write-Host "=                                           =" -ForegroundColor Green
-    Write-Host "=============================================" -ForegroundColor Green
+Write-Host "
+%     	  ______   ______  ______  ______   ______  ______  ______    ______  
+%	 | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
+% 	 |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
+% 	 |______| |______||______||______| |______||______||______|  |______| 
+% 	  ______  				                      ______
+% 	 | |__| |   _  _   ____  ___   __  _____  ____   ____  _     | |__| | 
+% 	 |  ()  |  | \/ | |____||_  \ \__/|_ _ _| / _  \/ _  \| |    |  ()  | 
+% 	 |______|  | || | | _|  | |  | ||   | |  | |.| | |.|  | |    |______| 
+% 	  ______   | || | |__|_ |_|  | ||   | |  | |_| | |_|  | |_    ______
+% 	 | |__| |  |_||_| |____||___/ /__\  |_|   \____/\____/|___|  | |__| | 
+% 	 | () | | 				                     |  ()  | 
+% 	 |______| 					             |______| 
+% 	  ______   ______  ______  ______   ______  ______  ______    ______  
+% 	 | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
+% 	 |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
+% 	 |______| |______||______||______| |______||______||______|  |______|
+" -ForegroundColor Cyan
     Write-Host "Bienvenido a MediTool, tu solución de seguridad Blue Team."
     Write-Host "Por favor, selecciona una opción del menú:"
     Write-Host ""
     
     $menuOptions = @(
-        [PSCustomObject]@{ "ID" = 1; "Opcion" = "Revisar Estado de RDP y Últimas Conexiones"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 1; "Opcion" = "Revisar Estado de RDP y Ultimas Conexiones"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 2; "Opcion" = "Auditar Reglas de Firewall Inseguras"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 3; "Opcion" = "Cerrar Puertos Inseguros (RDP/WinRM)"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 4; "Opcion" = "Administrar el servicio de RDP"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 5; "Opcion" = "Administrar la Telemetría de Windows"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 5; "Opcion" = "Administrar la Telemetria de Windows"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 6; "Opcion" = "Buscar Tareas Programadas Maliciosas"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 7; "Opcion" = "Analizar Política de Contraseñas"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 7; "Opcion" = "Analizar Politica de Contrasenas"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 8; "Opcion" = "Buscar Cuentas de Usuario Inactivas"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 9; "Opcion" = "Verificar Firmas de Archivos Críticos"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 10; "Opcion" = "Verificar Procesos en Ejecución sin Firma"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 9; "Opcion" = "Verificar Firmas de Archivos Criticos"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 10; "Opcion" = "Verificar Procesos en Ejecucion sin Firma"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 11; "Opcion" = "Detener Procesos Sin Firma"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 12; "Opcion" = "Bloquear Ejecución de Archivo"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 13; "Opcion" = "Auditar Registro de Inicio Automático (Autorun)"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 12; "Opcion" = "Bloquear Ejecucion de Archivo"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 13; "Opcion" = "Auditar Registro de Inicio Automatico (Autorun)"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 14; "Opcion" = "Analizar Conexiones de Red"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 15; "Opcion" = "Cerrar Conexiones Sospechosas"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 15; "Opcion" = "Mensaje ELMOnymous (h00kGh0st)"; "Estado" = "N/A" }, # <--- CAMBIADO
         [PSCustomObject]@{ "ID" = 16; "Opcion" = "Buscar Archivos Ocultos"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 17; "Opcion" = "Auditar Inicios de Sesión Fallidos"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 17; "Opcion" = "Auditar Inicios de Sesion Fallidos"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 18; "Opcion" = "Activar Windows (Advertencia de Seguridad)"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 19; "Opcion" = "Generar Reporte de Seguridad (HTML)"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 20; "Opcion" = "Información del Usuario y Sistema"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 20; "Opcion" = "Informacion del Usuario y Sistema"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 21; "Opcion" = "Gestor de Direcciones MAC"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 22; "Opcion" = "Actualizar todas las aplicaciones (winget)"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 0; "Opcion" = "Salir"; "Estado" = "N/A" }
@@ -1156,21 +1170,18 @@ function Show-MainMenu {
     
     $menuOptions | Format-Table -AutoSize
     
-    $selection = Read-Host "Ingresa el número de la opción que deseas ejecutar"
+    $selection = Read-Host "Ingresa el numero de la opcion que deseas ejecutar"
     
     switch ($selection) {
         "1" {
             $rdpIn = Get-LastIncomingRDPLogon
             $rdpOut = Get-LastOutgoingRDPConnection
             Write-Host "`nEstado del servicio RDP: $(Get-RDPStatus)"
-            Write-Host "`nUltima conexión RDP entrante:`n  - Fecha: $(if ($rdpIn) { $rdpIn.Fecha } else { 'N/A' })`n  - Usuario: $(if ($rdpIn) { $rdpIn.Usuario } else { 'N/A' })`n  - Origen: $(if ($rdpIn) { $rdpIn.Origen } else { 'N/A' })"
-            Write-Host "`nUltima conexión RDP saliente:`n  - Host/IP: $(if ($rdpOut) { $rdpOut.Host } else { 'N/A' })`n  - Fecha: $(if ($rdpOut) { $rdpOut.Fecha } else { 'N/A' })"
+            Write-Host "`nUltima conexion RDP entrante:`n  - Fecha: $(if ($rdpIn) { $rdpIn.Fecha } else { 'N/A' })`n  - Usuario: $(if ($rdpIn) { $rdpIn.Usuario } else { 'N/A' })`n  - Origen: $(if ($rdpIn) { $rdpIn.Origen } else { 'N/A' })"
+            Write-Host "`nUltima conexion RDP saliente:`n  - Host/IP: $(if ($rdpOut) { $rdpOut.Host } else { 'N/A' })`n  - Fecha: $(if ($rdpOut) { $rdpOut.Fecha } else { 'N/A' })"
         }
         "2" {
             $rules = Get-FirewallStatus
-            # Verifica si $rules tiene un valor y si no se imprimió un error en la función.
-            # La función Get-FirewallStatus ya imprime el error de permisos,
-            # por lo que no necesitamos duplicar ese mensaje.
             if ($rules) { 
                 Write-Host "Reglas de Firewall que permiten conexiones entrantes:" -ForegroundColor Yellow
                 $rules | Format-Table -AutoSize 
@@ -1197,12 +1208,12 @@ function Show-MainMenu {
             }
         }
         "7" {
-            Write-Host "`nAnalizando la politica de contraseñas..." -ForegroundColor Yellow
+            Write-Host "`nAnalizando la politica de contrasenas..." -ForegroundColor Yellow
             $policy = Analyze-PasswordPolicy
             if ($policy) {
                 $policy | Format-Table -AutoSize
             } else {
-                Write-Host "No se pudo obtener la politica de contraseñas. Asegurese de tener permisos." -ForegroundColor Red
+                Write-Host "No se pudo obtener la politica de contrasenas. Asegurese de tener permisos." -ForegroundColor Red
             }
         }
         "8" {
@@ -1220,7 +1231,7 @@ function Show-MainMenu {
         "10" {
             $unsignedProcesses = Find-UnsignedProcesses
             if ($unsignedProcesses.Count -gt 0) { 
-                Write-Host "Se encontraron procesos en ejecución sin firma digital:" -ForegroundColor Red
+                Write-Host "Se encontraron procesos en ejecucion sin firma digital:" -ForegroundColor Red
                 $unsignedProcesses | Format-Table -AutoSize 
             } else { 
                 Write-Host "No se encontraron procesos sin firma." -ForegroundColor Green 
@@ -1238,8 +1249,28 @@ function Show-MainMenu {
         "14" {
             Analyze-NetworkConnections
         }
-        "15" {
-            Write-Host "La opción para cerrar conexiones se encuentra dentro del análisis de red (opción 14)."
+        "15" { # <--- NUEVO CONTENIDO PARA LA OPCIÓN 15
+            Write-Host "
+                 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+                |                                                                                 |
+                |   _______ _            _           _        _   _                              |
+                |  |  _____| |          | |         | |      | \ | |                             |
+                |  | |  ___| |__   _ __ | | __ _ ___| |_ __ _|  \| | _____      _____             |
+                |  | | |_  | '_ \ | '_ \| |/ _  / __| __/ _` | . ` |/ _ \ \ /\ / / __|            |
+                |  | | |___| | | || |_) | | (_| \__ \ || (_| | |\  | (_) \ V  V /\__ \            |
+                |  |_|______|_| |_|| .__/|_|\__,_|___/\__\__,_|_| \_|\___/ \_/\_/ |___/            |
+                |                  | |                                                             |
+                |                  |_|                                                             |
+                |   ______         _       _                                                      |
+                |  |  ____|       (_)     | |                                                     |
+                |  | |__ __      ___ _ __ | | ___  _   _ ___                                      |
+                |  |  __| \ \ /\ / / | '_ \| |/ _ \| | | / __|                                     |
+                |  | |____ \ V  V /| | | | | | (_) | |_| \__ \                                     |
+                |  |_|_____\_/\_/ |_|_| |_|_|\___/ \__,_|___/                                     |
+                |                                                                                 |
+                |                       Copyright (c) 2023 h00kGh0st                             |
+                |                                                                                 |
+                |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|" -ForegroundColor Red
         }
         "16" {
             Find-HiddenFilesAndScan
@@ -1266,7 +1297,7 @@ function Show-MainMenu {
             }
             Write-Host "  - Administradores locales: $administrators"
 
-            Write-Host "`nInformación de Adaptadores de Red:" -ForegroundColor Cyan
+            Write-Host "`nInformacion de Adaptadores de Red:" -ForegroundColor Cyan
             if ($info.Redes.Count -gt 0) {
                 $info.Redes | Format-Table -AutoSize
             } else {
@@ -1290,16 +1321,3 @@ function Show-MainMenu {
     Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
     Read-Host | Out-Null
 }
-
-# Iniciar el bucle del menú
-while ($true) {
-    Show-MainMenu
-}
-
-Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
-Read-Host | Out-Null
-
-
-
-
-
