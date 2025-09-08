@@ -682,7 +682,7 @@ function Analyze-NetworkConnections {
                                 Write-Host "0. Volver al menu principal."
                                 $postCloseChoice = Read-Host "Opcion"
                                 
-                                switch ($postCloseChoice) {
+                                switch ($postCloseMenu) {
                                     "1" {
                                         if ($filePath) {
                                             Write-Host "Ruta del archivo analizado: $filePath" -ForegroundColor Green
@@ -1172,8 +1172,24 @@ function Show-MainMenu {
     Clear-Host
     # DIBUJO DE JERINGA ASCII HORIZONTAL
     Write-Host "
-
-                |                       Copyright (c) 2023 h00kGh0st                              |
+                 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+                |                                                                                 |
+                |   _______ _            _           _        _   _                              |
+                |  |  _____| |          | |         | |      | \ | |                             |
+                |  | |  ___| |__   _ __ | | __ _ ___| |_ __ _|  \| | _____      _____             |
+                |  | | |_  | '_ \ | '_ \| |/ _  / __| __/ _` | . ` |/ _ \ \ /\ / / __|            |
+                |  | | |___| | | || |_) | | (_| \__ \ || (_| | |\  | (_) \ V  V /\__ \            |
+                |  |_|______|_| |_|| .__/|_|\__,_|___/\__\__,_|_| \_|\___/ \_/\_/ |___/            |
+                |                  | |                                                             |
+                |                  |_|                                                             |
+                |   ______         _       _                                                      |
+                |  |  ____|       (_)     | |                                                     |
+                |  | |__ __      ___ _ __ | | ___  _   _ ___                                      |
+                |  |  __| \ \ /\ / / | '_ \| |/ _ \| | | / __|                                     |
+                |  | |____ \ V  V /| | | | | | (_) | |_| \__ \                                     |
+                |  |_|_____\_/\_/ |_|_| |_|_|\___/ \__,_|___/                                     |
+                |                                                                                 |
+                |                       Copyright (c) 2023 h00kGh0st                             |
                 |                                                                                 |
                 |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|" -ForegroundColor Red
     Write-Host "=============================================" -ForegroundColor Green
@@ -1378,4 +1394,3 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
-
