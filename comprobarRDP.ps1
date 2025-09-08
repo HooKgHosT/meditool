@@ -91,7 +91,7 @@ function Get-LastOutgoingRDPConnection {
 }
 
 function Get-FirewallStatus {
-    Write-Host "`nAnalizando reglas de firewall. Esto puede tardar unos segundos..." -ForegroundColor Yellow
+    Write-Host "`nAnalizando reglas de firewall. Esto puede tardar unos segundos..."
     
     # Lista de nombres de programas comunes a excluir.
     $excludedPrograms = @(
@@ -1350,4 +1350,5 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
