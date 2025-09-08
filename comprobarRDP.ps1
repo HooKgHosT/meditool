@@ -1160,6 +1160,9 @@ function Show-MainMenu {
         }
         "2" {
             $rules = Get-FirewallStatus
+            # Verifica si $rules tiene un valor y si no se imprimió un error en la función.
+            # La función Get-FirewallStatus ya imprime el error de permisos,
+            # por lo que no necesitamos duplicar ese mensaje.
             if ($rules) { 
                 Write-Host "Reglas de Firewall que permiten conexiones entrantes:" -ForegroundColor Yellow
                 $rules | Format-Table -AutoSize 
@@ -1287,6 +1290,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
