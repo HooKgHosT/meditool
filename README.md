@@ -30,9 +30,15 @@ Al ejecutarlo, el script se descargará temporalmente, se relanzará con permiso
 <img width="861" height="701" alt="screen3" src="https://github.com/user-attachments/assets/ea54858e-0f4a-447d-92cb-4613460497bc" />
 
 
-:page_with_curl: Licencia
+:page_with_curl: Licencia :page_with_curl:
 Este proyecto está bajo la licencia MIT. Puedes ver el archivo LICENSE para más detalles.
 
-:busts_in_silhouette: Contacto
-Para sugerencias o reportar errores, puedes contactar a h00kGh0st a través de las redes sociales:
+:busts_in_silhouette: Contacto :busts_in_silhouette:
+Para sugerencias, reportes de errores o si quieres contribuir, puedes contactarme a través de:
+
+GitHub: @HooKgHosT
+
+LinkedIn: D4N1FEIJ00
+
+Discord: Me puedes encontrar como ELMOnymous en el servidor de EvilSec.
 
