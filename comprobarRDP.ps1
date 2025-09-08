@@ -131,38 +131,29 @@ function Get-LastOutgoingRDPConnection {
 
 function Get-FirewallStatus {
     Write-Host "`nAnalizando reglas de firewall. Esto puede tardar unos segundos..." -ForegroundColor Yellow
-    
-    # Lista de nombres de programas comunes a excluir.
-    $excludedPrograms = @(
-        "*chrome.exe*", "*firefox.exe*", "*msedge.exe*",
-        "*steam.exe*", "*steamwebhelper.exe*", "*discord.exe*",
-        "*epicgameslauncher.exe*", "*unrealengine.exe*", "*zoom.exe*",
-        "*riotclientservices.exe*", "*riotclient.exe*", "*riotvanguard.exe*", "*leagueclient.exe*", "*leagueclientux.exe*", "*valorant.exe*",
-        "*spotify.exe*", "*visualstudiocode*", "*teamviewer*", "*anydesk*"
-    )
 
     try {
+        # Obtenemos todas las reglas de firewall activas.
         $allRules = Get-NetFirewallRule | Where-Object { 
             $_.Enabled -eq "True" -and ($_.Direction -eq "Inbound" -or $_.Direction -eq "Both") -and ($_.Action -eq "Allow") 
         }
 
-        # Filtrar reglas para encontrar las que no son de Windows o programas comunes.
-        $filteredRules = $allRules | Where-Object {
-            $programPath = $_.ProgramName.ToLower()
-            $isSystemProgram = $programPath.StartsWith("%programfiles%") -or $programPath.StartsWith("%programfiles(x86)%") -or $programPath.StartsWith("%windir%")
-            $isExcluded = $false
-            foreach ($excluded in $excludedPrograms) {
-                if ($programPath -like $excluded) {
-                    $isExcluded = $true
-                    break
-                }
+        $suspiciousRules = @()
+        foreach ($rule in $allRules) {
+            # Si la regla no esta vinculada a un programa especifico...
+            if (-not [string]::IsNullOrEmpty($rule.ProgramName)) {
+                 $suspiciousRules += $rule
             }
-            
-            # Devolver solo las reglas que no son del sistema y que no estan en la lista de excluidos.
-            -not $isSystemProgram -and -not $isExcluded
         }
         
-        return $filteredRules | Select-Object DisplayName, Direction, Action, Profile, Protocol, LocalPort
+        if ($suspiciousRules.Count -gt 0) {
+            Write-Host "Se encontraron las siguientes reglas de firewall que permiten conexiones entrantes:" -ForegroundColor Red
+            $suspiciousRules | Select-Object DisplayName, Direction, Action, Profile, Protocol, LocalPort | Format-Table -AutoSize
+        } else {
+            Write-Host "No se encontraron reglas de firewall que permitan conexiones entrantes." -ForegroundColor Green
+        }
+
+        return $suspiciousRules
     } catch {
         Write-Host "Error al obtener las reglas del Firewall. Asegurese de tener permisos de Administrador." -ForegroundColor Red
         return $null
@@ -514,18 +505,24 @@ function Find-RegistryAutorun {
 
     # Lista de programas comunes a excluir.
     $excludedPrograms = @(
-        "discord", "spotify", "riotgames", "steam", "epicgames", "zoom", "microsoft", "google"
+        "discord", "spotify", "riotgames", "steam", "epicgames", "zoom", "microsoft", "google", "brave", "opera", "teams"
     )
 
     foreach ($path in $autorunPaths) {
         try {
-            $keys = Get-ItemProperty -Path $path
-            $keys.PSObject.Properties | ForEach-Object {
-                $prop = $_
-                if ($prop.Name -ne "PSPath" -and $prop.Name -ne "PSDrive" -and $prop.Name -ne "PSProvider" -and $prop.Name -ne "PSParentPath") {
-                    $propValue = $prop.Value.ToLower()
-                    
-                    if ($propValue -and $propValue -notmatch "c:\\windows" -and $propValue -notmatch "c:\\program files" -and $propValue -notmatch "c:\\programdata") {
+            $keys = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue
+            if ($keys) {
+                $keys.PSObject.Properties | ForEach-Object {
+                    $prop = $_
+                    if ($prop.Name -ne "PSPath" -and $prop.Name -ne "PSDrive" -and $prop.Name -ne "PSProvider" -and $prop.Name -ne "PSParentPath") {
+                        $propValue = $prop.Value.ToLower()
+                        
+                        # Usa una lógica de exclusión más robusta
+                        $isSystemOrCommonPath = $propValue.StartsWith("c:\windows") -or
+                                                $propValue.StartsWith("c:\program files") -or
+                                                $propValue.StartsWith("c:\program files (x86)") -or
+                                                $propValue.StartsWith("c:\programdata")
+
                         $isExcluded = $false
                         foreach ($excluded in $excludedPrograms) {
                             if ($propValue -like "*$($excluded)*") {
@@ -534,7 +531,7 @@ function Find-RegistryAutorun {
                             }
                         }
 
-                        if (-not $isExcluded) {
+                        if (-not $isSystemOrCommonPath -and -not $isExcluded) {
                             $suspiciousEntries += [PSCustomObject]@{
                                 "Clave" = $prop.Name
                                 "Ruta" = $prop.Value
@@ -1396,6 +1393,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
