@@ -1187,8 +1187,7 @@ function Show-MainMenu {
        ______   ______  ______  ______   ______  ______  ______    ______  
       | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
       |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
-      |______| |______||______||______| |______||______||______|  |______|
-                    Copyright [c] 2023 - H00kGh0st" -ForegroundColor Cyan
+      |______| |______||______||______| |______||______||______|  |______| Copyright [c] 2023 - H00kGh0st" -ForegroundColor Cyan
     Write-Host "Bienvenido a MediTool, tu solución de seguridad Blue Team."
     Write-Host "Por favor, selecciona una opción del menú:"
     Write-Host ""
@@ -1386,5 +1385,6 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
