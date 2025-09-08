@@ -1476,9 +1476,25 @@ function Show-MainMenu {
             Generate-HTMLReport
         }
         "20" {
-            Get-UserInfo
-            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
-            Read-Host | Out-Null
+            $info = Get-UserInfo
+            Write-Host "`nInformación del Usuario y Sistema:" -ForegroundColor Yellow
+            Write-Host "  - Usuario actual: $($info.UsuarioActual)"
+            Write-Host "  - Nombre del equipo: $($info.NombreEquipo)"
+        
+            Write-Host "`nInformación de Administradores Locales:" -ForegroundColor Cyan
+            if ($info.AdministradoresLocales.Count -gt 0) {
+                $administrators = [string]::join(', ', $info.AdministradoresLocales)
+                Write-Host "  - Administradores locales: $administrators"
+            } else {
+                Write-Host "  - No se pudieron obtener los administradores locales." -ForegroundColor Red
+            }
+
+            Write-Host "`nInformación de Adaptadores de Red:" -ForegroundColor Cyan
+            if ($info.Redes.Count -gt 0) {
+                $info.Redes | Format-Table -AutoSize
+            } else {
+                Write-Host "  - No se encontraron adaptadores de red activos." -ForegroundColor Red
+            }
         }
         "21" {
             MacChangerMenu
@@ -1498,8 +1514,13 @@ function Show-MainMenu {
             Write-Host "Opción no válida. Por favor, intente de nuevo." -ForegroundColor Red
         }
     }
+    
+    # Pausa global para que el usuario pueda ver el resultado antes de que el menú se reinicie
+    if ($selection -ne "0" -and $selection -ne "7" -and $selection -ne "2" -and $selection -ne "13" -and $selection -ne "14" -and $selection -ne "11") {
+        Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+        Read-Host | Out-Null
+    }
 }
-
 # Iniciar el bucle del menú
 while ($true) {
     Show-MainMenu
@@ -1509,6 +1530,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
