@@ -85,13 +85,14 @@ function Get-LastIncomingRDPLogon {
         $event = Get-WinEvent -FilterHashtable @{Logname='Security'; Id=4624; Data='3389'} -MaxEvents 1 -ErrorAction Stop
         if ($event) {
             $props = @{
-                "Fecha" = $event.TimeCreated
+                "Fecha"   = $event.TimeCreated
                 "Usuario" = $event.Properties[5].Value
-                "Origen" = $event.Properties[18].Value
+                "Origen"  = $event.Properties[18].Value
             }
             return [PSCustomObject]$props
         }
     } catch {
+        # Si ocurre un error (ej. no se encuentran eventos), no devuelve nada.
         return $null
     }
 }
@@ -1744,6 +1745,7 @@ while ($true) {
         Read-Host | Out-Null
     }
 }
+
 
 
 
