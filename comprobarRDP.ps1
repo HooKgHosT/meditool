@@ -1137,15 +1137,40 @@ function Generate-HTMLReport {
     Invoke-Item $reportPath
 }
 
+That's a great point. It seems I made a mistake in the previous response by providing a complex version of Get-UserInfo that wasn't necessary. You're right, the simpler version you provided is what works for you. I apologize for that.
+
+Let's combine the working parts of your script to fix the issue with menu option 20. I will integrate the working Get-UserInfo function that you provided and make sure that the network information part is also working correctly.
+
+The Fix
+To ensure menu option 20 works as expected, I've integrated the working Get-UserInfo function you provided with the network information part that we previously fixed. This ensures that the script collects the data and displays it correctly.
+
+Código Corregido
+Replace the Get-UserInfo function and the menu option 20 switch statement with the following code. This version should now work correctly, showing the user information, network information, and pausing the script for you to read.
+
+PowerShell
+
 function Get-UserInfo {
-    $adminMembers = @()
+    # Información del usuario y sistema
+    Write-Host "Informacion del Usuario y Sistema:" -ForegroundColor Yellow
+    Write-Host "  - Usuario actual: $($env:USERNAME)"
+    Write-Host "  - Nombre del equipo: $($env:COMPUTERNAME)"
+
+    # Obtener administradores locales de forma fiable usando el SID
+    Write-Host "`nInformacion de Administradores Locales:" -ForegroundColor Cyan
     try {
         $adminGroup = (Get-LocalGroup | Where-Object { $_.SID -eq "S-1-5-32-544" }).Name
         if ($adminGroup) {
-            $adminMembers = (Get-LocalGroupMember -Group $adminGroup -ErrorAction Stop).Name
+            $admins = (Get-LocalGroupMember -Group $adminGroup -ErrorAction Stop).Name
+            Write-Host "  - Administradores locales: $([string]::join(', ', $admins))"
+        } else {
+            Write-Host "  - No se pudo encontrar el grupo de administradores locales." -ForegroundColor Red
         }
-    } catch {}
+    } catch {
+        Write-Host "  - No se pudieron obtener los administradores locales. Asegurese de tener permisos de Administrador." -ForegroundColor Red
+    }
     
+    # Obtener informacion de la red y los adaptadores
+    Write-Host "`nInformacion de Adaptadores de Red:" -ForegroundColor Cyan
     $networkAdapters = @()
     try {
         $adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' -and $_.Virtual -eq $false }
@@ -1161,16 +1186,20 @@ function Get-UserInfo {
                     "Subred" = if ($ipAddress) { $ipAddress.PrefixLength } else { "N/A" }
                 }
             }
+            if ($networkAdapters.Count -gt 0) {
+                $networkAdapters | Format-Table -AutoSize
+            } else {
+                Write-Host "  - No se encontraron adaptadores de red fisicos activos." -ForegroundColor Red
+            }
+        } else {
+            Write-Host "  - No se encontraron adaptadores de red fisicos activos." -ForegroundColor Red
         }
-    } catch {}
-
-    $info = [PSCustomObject]@{
-        "UsuarioActual" = $env:USERNAME
-        "NombreEquipo" = $env:COMPUTERNAME
-        "AdministradoresLocales" = $adminMembers
-        "Redes" = $networkAdapters
+    } catch {
+        Write-Host "Error al obtener informacion de los adaptadores de red." -ForegroundColor Red
     }
-    return $info
+
+    Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+    Read-Host | Out-Null
 }
 
 function Set-WindowFocus {
@@ -1657,6 +1686,7 @@ while ($true) {
 }
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
