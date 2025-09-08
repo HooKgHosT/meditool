@@ -347,78 +347,31 @@ function Find-MaliciousScheduledTasks {
     }
 }
 
-function Analyze-PasswordPolicy {
-    Write-Host "`nAnalizando la politica de contrasenas..." -ForegroundColor Yellow
+function Audit-NonEssentialServices {
+    Write-Host "`nAuditoria de servicios no esenciales en ejecucion..." -ForegroundColor Yellow
     
-    # Intenta obtener la politica de contrasenas del dominio de Active Directory
-    try {
-        $policy = Get-ADDefaultDomainPasswordPolicy -ErrorAction Stop
-        
-        Write-Host "Politica de contrasenas de Active Directory encontrada." -ForegroundColor Green
-        
-        $results = [PSCustomObject]@{
-            "Longitud Minima" = $policy.MinPasswordLength
-            "Complejidad" = if ($policy.PasswordComplexity -eq "true") { "Habilitada" } else { "Deshabilitada" }
-            "Historial" = $policy.PasswordHistoryCount
-            "Antiguedad Maxima (dias)" = ($policy.MaxPasswordAge).Days
-        }
-        $results | Format-Table -AutoSize
-        return
-    } catch {
-        Write-Host "No se pudo obtener la politica de contrasenas del dominio. Usando el metodo local (secedit)." -ForegroundColor Yellow
-    }
+    # Lista de servicios no esenciales que comunmente se pueden deshabilitar
+    $nonEssentialServices = @(
+        "Fax",
+        "HomeGroupProvider",
+        "Spooler", # Servicio de impresion
+        "Themes",
+        "WSearch", # Windows Search
+        "DiagTrack", # Servicio de diagnostico
+        "CDPSvc", # Connected Devices Platform
+        "PcaSvc", # Program Compatibility Assistant Service
+        "RemoteRegistry",
+        "SensorService" # Servicio de sensores de Windows
+    )
 
-    # Usar secedit para obtener la politica de cuentas locales (metodo definitivo)
-    $infPath = "$env:TEMP\temp_sec_policy.inf"
-    
-    # Guardar el directorio de trabajo actual y cambiarlo a la ruta temporal
-    $originalPath = Get-Location
-    Set-Location -Path $env:TEMP
-    
-    try {
-        # Exportar solo la politica de seguridad al archivo INF en el directorio temporal
-        secedit /export /cfg $infPath /areas SECURITYPOLICY -ErrorAction Stop
-        
-        # Verificar si el archivo se creo y tiene contenido
-        if (Test-Path $infPath -and (Get-Content $infPath)) {
-            $passwordPolicy = Get-Content $infPath | Where-Object { 
-                $_ -like "MinimumPasswordLength*" -or
-                $_ -like "PasswordComplexity*" -or
-                $_ -like "PasswordHistorySize*" -or
-                $_ -like "MaximumPasswordAge*"
-            }
-            
-            $resultsTable = @()
-            $foundData = $false
+    $runningNonEssential = Get-Service -Name $nonEssentialServices -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Running' }
 
-            if ($passwordPolicy) {
-                $foundData = $true
-                $minLen = ($passwordPolicy | Where-Object { $_ -like "*MinimumPasswordLength*" }).Split('=')[1].Trim()
-                $complexity = ($passwordPolicy | Where-Object { $_ -like "*PasswordComplexity*" }).Split('=')[1].Trim()
-                $history = ($passwordPolicy | Where-Object { $_ -like "*PasswordHistorySize*" }).Split('=')[1].Trim()
-                $maxAge = ($passwordPolicy | Where-Object { $_ -like "*MaximumPasswordAge*" }).Split('=')[1].Trim()
-                
-                $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Longitud Minima"; "Valor" = $minLen }
-                $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Complejidad"; "Valor" = if ($complexity -eq "1") { "Habilitada" } else { "Deshabilitada" } }
-                $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Historial"; "Valor" = $history }
-                $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Antiguedad Maxima (dias)"; "Valor" = [math]::Floor($maxAge / 86400) } # Convertir segundos a dias
-            }
-            
-            if ($foundData) {
-                $resultsTable | Format-Table -AutoSize
-            } else {
-                Write-Host "La informacion de politica de contrasenas no esta disponible." -ForegroundColor Red
-            }
-        } else {
-            Write-Host "El archivo de politica de seguridad no fue creado o esta vacio." -ForegroundColor Red
-        }
-
-    } catch {
-        Write-Host "Error al usar secedit. Asegurese de que se esta ejecutando con privilegios de Administrador." -ForegroundColor Red
-    } finally {
-        # Volver al directorio de trabajo original y limpiar los archivos temporales
-        Set-Location -Path $originalPath
-        if (Test-Path $infPath) { Remove-Item $infPath -Force -ErrorAction SilentlyContinue }
+    if ($runningNonEssential.Count -gt 0) {
+        Write-Host "Se encontraron los siguientes servicios no esenciales en ejecucion:" -ForegroundColor Red
+        $runningNonEssential | Select-Object Name, DisplayName, Status | Format-Table -AutoSize
+        Write-Host "`nConsidere deshabilitar estos servicios para mejorar la seguridad y el rendimiento." -ForegroundColor Yellow
+    } else {
+        Write-Host "No se encontraron servicios no esenciales en ejecucion." -ForegroundColor Green
     }
 }
 
@@ -1337,7 +1290,7 @@ function Show-MainMenu {
         [PSCustomObject]@{ "ID" = 4; "Opcion" = "Administrar el servicio de RDP"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 5; "Opcion" = "Administrar la Telemetria de Windows"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 6; "Opcion" = "Buscar Tareas Programadas Maliciosas"; "Estado" = "N/A" },
-        [PSCustomObject]@{ "ID" = 7; "Opcion" = "Analizar Politica de Contrasenas"; "Estado" = "N/A" },
+        [PSCustomObject]@{ "ID" = 7; "Opcion" = "Auditar Servicios No Esenciales"; "Estado" = "N/A" },        
         [PSCustomObject]@{ "ID" = 8; "Opcion" = "Buscar Cuentas de Usuario Inactivas"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 9; "Opcion" = "Verificar Firmas de Archivos Criticos"; "Estado" = "N/A" },
         [PSCustomObject]@{ "ID" = 10; "Opcion" = "Verificar Procesos en Ejecucion sin Firma"; "Estado" = "N/A" },
@@ -1397,13 +1350,7 @@ function Show-MainMenu {
             }
         }
         "7" {
-            Write-Host "`nAnalizando la politica de contrasenas..." -ForegroundColor Yellow
-            $policy = Analyze-PasswordPolicy
-            if ($policy) {
-                $policy | Format-Table -AutoSize
-            } else {
-                Write-Host "No se pudo obtener la politica de contrasenas. Asegurese de tener permisos." -ForegroundColor Red
-            }
+            Audit-NonEssentialServices
         }
         "8" {
             $inactiveUsers = Find-InactiveUsers
@@ -1503,6 +1450,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
