@@ -134,7 +134,7 @@ function Fix-FirewallPorts {
             $rules | Remove-NetFirewallRule -Confirm:$false
             Write-Host "Puertos cerrados exitosamente." -ForegroundColor Green
         } else {
-            Write-Host "No se encontraron reglas de firewall inseguras que eliminar." -ForegroundColor Green
+Host "No se encontraron reglas de firewall inseguras que eliminar." -ForegroundColor Green
         }
     } catch {
         Write-Host "Error al intentar cerrar los puertos. Asegúrese de tener permisos de Administrador." -ForegroundColor Red
@@ -1114,11 +1114,11 @@ function Clean-TempFolder {
     }
 }
 function Check-ISO27001Status {
-    Write-Host "
+    Write-Host @"
     ========================================================
     ==            Estado de Seguridad (ISO 27001)         ==
     ========================================================
-    " -ForegroundColor Cyan
+"@ -ForegroundColor Cyan
     
     $passed = $true
     
@@ -1170,11 +1170,6 @@ function Check-ISO27001Status {
 # --- MENÚ PRINCIPAL ---
 function Show-MainMenu {
     Clear-Host
-    # DIBUJO DE JERINGA ASCII HORIZONTAL
-    Write-Host "
-                |                       Copyright (c) 2023 h00kGh0st                             |
-                |                                                                                 |
-                |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|" -ForegroundColor Red
     Write-Host "=============================================" -ForegroundColor Green
     Write-Host "=                                           =" -ForegroundColor Green
     Write-Host "=        Herramienta de Seguridad MediTool  =" -ForegroundColor Green
@@ -1293,10 +1288,7 @@ function Show-MainMenu {
             Analyze-NetworkConnections
         }
         "15" {
-            Write-Host "
-                |                       Copyright (c) 2023 h00kGh0st                             |
-                |                                                                                 |
-                |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|" -ForegroundColor Red
+            Write-Host "Copyright (c) 2023 h00kGh0st"
         }
         "16" {
             Find-HiddenFilesAndScan
@@ -1360,5 +1352,3 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
-
-
