@@ -7,6 +7,11 @@ $tempPath  = Join-Path $env:TEMP "comprobarRDP.ps1"
 # Si el script aún no está ejecutándose desde TEMP → descargarlo y relanzar
 if (-not $MyInvocation.MyCommand.Path -or ($MyInvocation.MyCommand.Path -ne $tempPath)) {
     try {
+        # Intenta eliminar el archivo temporal si existe
+        if (Test-Path $tempPath) {
+            Remove-Item $tempPath -Force
+        }
+
         Invoke-WebRequest -Uri $scriptUrl -OutFile $tempPath -UseBasicParsing
         Write-Host "Descargado en: $tempPath" -ForegroundColor Cyan
 
@@ -1321,3 +1326,4 @@ Write-Host "
     Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
     Read-Host | Out-Null
 }
+
