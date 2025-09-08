@@ -1630,8 +1630,6 @@ function Show-MainMenu {
         }
         "20" {
             Get-UserInfo
-            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
-            Read-Host | Out-Null
         }
         "21" {
             MacChangerMenu
@@ -1676,6 +1674,7 @@ while ($true) {
 }
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
