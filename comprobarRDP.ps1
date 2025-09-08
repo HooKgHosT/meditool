@@ -350,8 +350,8 @@ function Find-MaliciousScheduledTasks {
 function Analyze-PasswordPolicy {
     Write-Host "`nAnalizando la politica de contrasenas..." -ForegroundColor Yellow
     
+    # Intenta obtener la politica de contrasenas del dominio de Active Directory
     try {
-        # Intenta obtener la politica de contrasenas del dominio de Active Directory
         $policy = Get-ADDefaultDomainPasswordPolicy -ErrorAction Stop
         
         Write-Host "Politica de contrasenas de Active Directory encontrada." -ForegroundColor Green
@@ -362,23 +362,53 @@ function Analyze-PasswordPolicy {
             "Historial" = $policy.PasswordHistoryCount
             "Antiguedad Maxima (dias)" = ($policy.MaxPasswordAge).Days
         }
-        Write-Host ""
         $results | Format-Table -AutoSize
+        return
+    } catch {
+        Write-Host "No se pudo obtener la politica de contrasenas del dominio. Usando el metodo local (secedit)." -ForegroundColor Yellow
+    }
+
+    # Usar secedit para obtener la politica de cuentas locales (metodo definitivo)
+    $sdbPath = "$env:TEMP\temp_sec_db.sdb"
+    $infPath = "$env:TEMP\temp_sec_policy.inf"
+    
+    try {
+        secedit /export /cfg $infPath -ErrorAction Stop
+        
+        $passwordPolicy = Get-Content $infPath | Where-Object { 
+            $_ -like "MinimumPasswordLength*" -or
+            $_ -like "PasswordComplexity*" -or
+            $_ -like "PasswordHistorySize*" -or
+            $_ -like "MaximumPasswordAge*"
+        }
+        
+        $resultsTable = @()
+        $foundData = $false
+
+        if ($passwordPolicy) {
+            $foundData = $true
+            $minLen = ($passwordPolicy | Where-Object { $_ -like "*MinimumPasswordLength*" }).Split('=')[1].Trim()
+            $complexity = ($passwordPolicy | Where-Object { $_ -like "*PasswordComplexity*" }).Split('=')[1].Trim()
+            $history = ($passwordPolicy | Where-Object { $_ -like "*PasswordHistorySize*" }).Split('=')[1].Trim()
+            $maxAge = ($passwordPolicy | Where-Object { $_ -like "*MaximumPasswordAge*" }).Split('=')[1].Trim()
+            
+            $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Longitud Minima"; "Valor" = $minLen }
+            $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Complejidad"; "Valor" = if ($complexity -eq "1") { "Habilitada" } else { "Deshabilitada" } }
+            $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Historial"; "Valor" = $history }
+            $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Antiguedad Maxima (dias)"; "Valor" = [math]::Floor($maxAge / 86400) } # Convertir segundos a dias
+        }
+        
+        if ($foundData) {
+            $resultsTable | Format-Table -AutoSize
+        } else {
+            Write-Host "La informacion de politica de contrasenas no esta disponible." -ForegroundColor Red
+        }
 
     } catch {
-        Write-Host "No se pudo obtener la politica de contrasenas del dominio. Usando el metodo local (WMI)." -ForegroundColor Yellow
-
-        # Usar WMI para obtener la politica de cuentas locales
-        $localPolicy = Get-CimInstance -ClassName Win32_UserAccount -Filter "Name='$env:USERNAME'"
-        $passwordSettings = Get-CimInstance -ClassName Win32_AccountPasswordSettings
-
-        $resultsTable = @()
-        $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Longitud Minima"; "Valor" = $passwordSettings.MinimumPasswordLength }
-        $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Complejidad"; "Valor" = if ($passwordSettings.PasswordComplexity -eq "true") { "Habilitada" } else { "Deshabilitada" } }
-        $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Historial"; "Valor" = $passwordSettings.PasswordHistorySize }
-        $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Antiguedad Maxima (dias)"; "Valor" = $passwordSettings.MaximumPasswordAge }
-
-        $resultsTable | Format-Table -AutoSize
+        Write-Host "Error al usar secedit. Asegurese de que se esta ejecutando con privilegios de Administrador." -ForegroundColor Red
+    } finally {
+        # Limpiar los archivos temporales
+        if (Test-Path $infPath) { Remove-Item $infPath -Force -ErrorAction SilentlyContinue }
     }
 }
 
@@ -1463,6 +1493,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
