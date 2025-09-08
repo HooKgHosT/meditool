@@ -131,7 +131,7 @@ function Fix-FirewallPorts {
 }
 
 function Manage-RDP {
-    Write-Host "Estado actual del RDP: $(Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections").fDenyTSConnections"
+    Write-Host "Estado actual del RDP: $((Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections").fDenyTSConnections)"
     Write-Host ""
     Write-Host "1. Habilitar RDP"
     Write-Host "2. Deshabilitar RDP"
@@ -1000,6 +1000,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
