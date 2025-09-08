@@ -967,7 +967,7 @@ function Audit-FailedLogons {
     
     try {
         # Se obtiene el registro de eventos de forma segura, sin detener la ejecucion si no se encuentran eventos.
-        $failedLogons = Get-WinEvent -FilterHashtable @{ 
+        $failedLogons = Get-WinEvent -FilterHashtable { 
             Logname = 'Security'; 
             Id = 4625; 
             StartTime = $lastDay 
@@ -1550,6 +1550,7 @@ while ($true) {
 }
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
