@@ -194,6 +194,60 @@ function Stop-OrBlock-Process {
     }
 }
 
+function Invoke-PeasHardeningChecks {
+    Write-Host "`n--- Realizando Chequeos de Hardening contra Herramientas de Enumeración (PEAS) ---" -ForegroundColor Cyan
+    
+    # 1. Comprobar rutas de servicios sin comillas (Unquoted Service Paths)
+    Write-Host "`n[1] Buscando rutas de servicio sin comillas..." -ForegroundColor Yellow
+    $unquotedServices = Get-CimInstance Win32_Service | Where-Object { $_.PathName -like '* *' -and $_.PathName -notlike '"*' }
+    if ($unquotedServices) {
+        Write-Host "[VULNERABLE] Se encontraron servicios con rutas sin comillas. Esto puede permitir escalada de privilegios:" -ForegroundColor Red
+        $unquotedServices | Format-Table Name, PathName -AutoSize
+    } else {
+        Write-Host "[OK] No se encontraron servicios con rutas vulnerables." -ForegroundColor Green
+    }
+    
+    # 2. Comprobar si AlwaysInstallElevated está activado
+    Write-Host "`n[2] Verificando la política 'AlwaysInstallElevated'..." -ForegroundColor Yellow
+    $keyPath1 = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer"
+    $keyPath2 = "HKCU:\Software\Policies\Microsoft\Windows\Installer"
+    $value1 = Get-ItemPropertyValue -Path $keyPath1 -Name "AlwaysInstallElevated" -ErrorAction SilentlyContinue
+    $value2 = Get-ItemPropertyValue -Path $keyPath2 -Name "AlwaysInstallElevated" -ErrorAction SilentlyContinue
+    if ($value1 -eq 1 -and $value2 -eq 1) {
+        Write-Host "[VULNERABLE] La política 'AlwaysInstallElevated' está activada. Un usuario estándar podría instalar MSI con privilegios de SYSTEM." -ForegroundColor Red
+        $fix = Read-Host "¿Desea deshabilitar esta política ahora? (S/N)"
+        if ($fix -eq 's') {
+            Set-ItemProperty -Path $keyPath1 -Name "AlwaysInstallElevated" -Value 0
+            Set-ItemProperty -Path $keyPath2 -Name "AlwaysInstallElevated" -Value 0
+            Write-Host "[CORREGIDO] La política ha sido deshabilitada." -ForegroundColor Green
+            Add-LogEntry -Message "Política 'AlwaysInstallElevated' deshabilitada."
+        }
+    } else {
+        Write-Host "[OK] La política 'AlwaysInstallElevated' no está activada." -ForegroundColor Green
+    }
+    
+    # 3. Listar credenciales guardadas en el Administrador de Credenciales
+    Write-Host "`n[3] Listando credenciales guardadas por el sistema (cmdkey)..." -ForegroundColor Yellow
+    $credList = cmdkey /list
+    if ($credList -match "Currently stored credentials") {
+        Write-Host "[INFO] Se encontraron las siguientes credenciales guardadas. Revise si son necesarias:" -ForegroundColor Cyan
+        $credList
+    } else {
+        Write-Host "[OK] No se encontraron credenciales guardadas con cmdkey." -ForegroundColor Green
+    }
+    
+    # 4. Verificar si el motor de PowerShell v2 está habilitado
+    Write-Host "`n[4] Verificando si el motor de PowerShell v2 está habilitado..." -ForegroundColor Yellow
+    $psv2Feature = Get-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2
+    if ($psv2Feature.State -eq 'Enabled') {
+        Write-Host "[ADVERTENCIA] El motor de PowerShell v2 está HABILITADO. Es una versión antigua y carece de las características de seguridad modernas (logging, etc.). Se recomienda deshabilitarlo." -ForegroundColor Yellow
+    } else {
+        Write-Host "[OK] El motor de PowerShell v2 está deshabilitado." -ForegroundColor Green
+    }
+    
+    Write-Host "`n--- Chequeo de Hardening finalizado ---" -ForegroundColor Cyan
+}
+
 function Fix-FirewallPorts {
     Write-Host "Cerrando puertos inseguros (RDP/WinRM)..." -ForegroundColor Yellow
     try {
@@ -866,46 +920,51 @@ function Show-MainMenu {
     Write-Host "=============================================" -ForegroundColor Green
     Write-Host "=         Herramienta de Auditoría MediTool         =" -ForegroundColor Green
     Write-Host "=============================================" -ForegroundColor Green
-    Write-Host "Selecciona una opción:"
+    Write-Host "Bienvenido a MediTool, tu solucion de seguridad Blue Team."
+    Write-Host "Por favor, selecciona una opcion del menu:"
+    Write-Host ""
     
     $menuOptions = @(
-        [PSCustomObject]@{ "ID" = 1; "Opcion" = "Revisar Estado de RDP y Conexiones" },
-        [PSCustomObject]@{ "ID" = 2; "Opcion" = "Auditar Reglas de Firewall" },
+        [PSCustomObject]@{ "ID" = 1; "Opcion" = "Revisar Estado de RDP y Ultimas Conexiones" },
+        [PSCustomObject]@{ "ID" = 2; "Opcion" = "Auditar Reglas de Firewall Inseguras" },
         [PSCustomObject]@{ "ID" = 3; "Opcion" = "Cerrar Puertos Inseguros (RDP/WinRM)" },
-        [PSCustomObject]@{ "ID" = 4; "Opcion" = "Administrar RDP" },
-        [PSCustomObject]@{ "ID" = 5; "Opcion" = "Administrar Telemetría de Windows" },
+        [PSCustomObject]@{ "ID" = 4; "Opcion" = "Administrar el servicio de RDP" },
+        [PSCustomObject]@{ "ID" = 5; "Opcion" = "Administrar la Telemetria de Windows" },
         [PSCustomObject]@{ "ID" = 6; "Opcion" = "Buscar Tareas Programadas Maliciosas" },
-        [PSCustomObject]@{ "ID" = 7; "Opcion" = "Auditar Servicios No Esenciales" },
+        [PSCustomObject]@{ "ID" = 7; "Opcion" = "Auditar Servicios No Esenciales" },      
         [PSCustomObject]@{ "ID" = 8; "Opcion" = "Buscar Cuentas de Usuario Inactivas" },
-        [PSCustomObject]@{ "ID" = 9; "Opcion" = "Verificar Firmas de Archivos Críticos" },
-        [PSCustomObject]@{ "ID" = 10; "Opcion" = "Verificar Procesos sin Firma" },
-        [PSCustomObject]@{ "ID" = 11; "Opcion" = "Detener Proceso sin Firma" },
-        [PSCustomObject]@{ "ID" = 12; "Opcion" = "Bloquear Ejecución de Archivo" },
-        [PSCustomObject]@{ "ID" = 13; "Opcion" = "Auditar Registro de Inicio Automático" },
+        [PSCustomObject]@{ "ID" = 9; "Opcion" = "Verificar Firmas de Archivos Criticos" },
+        [PSCustomObject]@{ "ID" = 10; "Opcion" = "Verificar Procesos en Ejecucion sin Firma" },
+        [PSCustomObject]@{ "ID" = 11; "Opcion" = "Detener Procesos Sin Firma" },
+        [PSCustomObject]@{ "ID" = 12; "Opcion" = "Bloquear Ejecucion de Archivo" },
+        [PSCustomObject]@{ "ID" = 13; "Opcion" = "Auditar Registro de Inicio Automatico (Autorun)" },
         [PSCustomObject]@{ "ID" = 14; "Opcion" = "Analizar Conexiones de Red" },
-        [PSCustomObject]@{ "ID" = 15; "Opcion" = "Mensaje del Creador" },
-        [PSCustomObject]@{ "ID" = 16; "Opcion" = "Buscar Archivos Ocultos y Escanear" },
-        [PSCustomObject]@{ "ID" = 17; "Opcion" = "Auditar Inicios de Sesión Fallidos" },
-        [PSCustomObject]@{ "ID" = 18; "Opcion" = "Activar Windows (No Oficial)" },
+        [PSCustomObject]@{ "ID" = 15; "Opcion" = "Mensaje ELMOnymous (h00kGh0st)" },
+        [PSCustomObject]@{ "ID" = 16; "Opcion" = "Buscar Archivos Ocultos" },
+        [PSCustomObject]@{ "ID" = 17; "Opcion" = "Auditar Inicios de Sesion Fallidos" },
+        [PSCustomObject]@{ "ID" = 18; "Opcion" = "Activar Windows (Advertencia de Seguridad)" },
         [PSCustomObject]@{ "ID" = 19; "Opcion" = "Generar Reporte de Seguridad (HTML)" },
-        [PSCustomObject]@{ "ID" = 20; "Opcion" = "Información del Sistema" },
+        [PSCustomObject]@{ "ID" = 20; "Opcion" = "Informacion del Usuario y Sistema" },
+        [PSCustomObject]@{ "ID" = 21; "Opcion" = "Gestor de Direcciones MAC" },
         [PSCustomObject]@{ "ID" = 22; "Opcion" = "Actualizar todas las aplicaciones (winget)" },
-        [PSCustomObject]@{ "ID" = 23; "Opcion" = "Verificación de Estado (ISO 27001)" },
-        [PSCustomObject]@{ "ID" = 24; "Opcion" = "Limpiar Archivos Basura del Sistema" },
+        [PSCustomObject]@{ "ID" = 23; "Opcion" = "Verificacion de Estado (ISO 27001 simplificado)" },
+        [PSCustomObject]@{ "ID" = 24; "Opcion" = "Limpiar Archivos Temporales del Sistema" },
         [PSCustomObject]@{ "ID" = 25; "Opcion" = "Buscar Archivos de 0 Bytes" },
         [PSCustomObject]@{ "ID" = 26; "Opcion" = "Analizar Memoria del Sistema" },
         [PSCustomObject]@{ "ID" = 27; "Opcion" = "Realizar Análisis Completo del Sistema (Necesario para Reporte)" },
+        [PSCustomObject]@{ "ID" = 28; "Opcion" = "Realizar Chequeo Anti-PEAS (Hardening)" }, # <--- ¡NUEVA OPCIÓN!
         [PSCustomObject]@{ "ID" = 0; "Opcion" = "Salir" }
     )
     
     $script:menuOptions = $menuOptions
     $menuOptions | Format-Table -Property @{Expression="ID"; Width=4}, Opcion -HideTableHeaders
     
-    return Read-Host "Ingresa el número de la opción"
+    $selection = Read-Host "Ingresa el numero de la opcion que deseas ejecutar"
+    return $selection
 }
 
 # --- INICIO DEL SCRIPT Y BUCLE PRINCIPAL ---
-
+Capture-InitialState
 # El script ahora inicia directamente en el menú.
 # La función Capture-InitialState se llama desde la Opción 27 o desde la 19 (Reporte).
 
@@ -965,6 +1024,9 @@ while ($true) {
             Write-Host "Iniciando análisis completo del sistema. Esto puede tardar varios minutos..." -ForegroundColor Yellow
             Capture-InitialState
             Write-Host "Análisis completo y captura de estado finalizados." -ForegroundColor Green
+        }
+        "28" {
+            Invoke-PeasHardeningChecks
         }
         "0" {
             Clean-TempFolder
