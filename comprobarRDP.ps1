@@ -1104,15 +1104,15 @@ function Get-UserInfo {
         $adminMembers = (Get-LocalGroupMember -Group "Administrators" -ErrorAction SilentlyContinue).Name
     } catch {}
     
-    # Obtener información de la red y los adaptadores
+    # Obtener informacion de la red y los adaptadores
     $networkAdapters = @()
     try {
-        $adapters = Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' }
+        $adapters = Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' }
         foreach ($adapter in $adapters) {
             $networkAdapters += [PSCustomObject]@{
                 "Nombre" = $adapter.Name
                 "Tipo" = $adapter.InterfaceDescription
-                "DirecciónMAC" = $adapter.MacAddress
+                "DireccionMAC" = $adapter.MacAddress
             }
         }
     } catch {}
@@ -1471,3 +1471,4 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
