@@ -971,7 +971,7 @@ function Audit-FailedLogons {
             Logname = 'Security'; 
             Id = 4625; 
             StartTime = $lastDay 
-        } | Select-Object TimeCreated, @{ Name = 'Usuario'; Expression = { $_.Properties[5].Value } }, @{ Name = 'Origen'; Expression = { $_.Properties[18].Value } }
+        } -ErrorAction SilentlyContinue | Select-Object TimeCreated, @{ Name = 'Usuario'; Expression = { $_.Properties[5].Value } }, @{ Name = 'Origen'; Expression = { $_.Properties[18].Value } }
         
         if ($failedLogons.Count -gt 0) {
             Write-Host "Se encontraron los siguientes intentos de inicio de sesion fallidos:" -ForegroundColor Red
@@ -1550,6 +1550,7 @@ while ($true) {
 }
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
