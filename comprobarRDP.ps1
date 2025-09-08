@@ -4,7 +4,6 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
     # Si el script no se está ejecutando como administrador, solicita elevación.
     $arguments = "& '" + $myinvocation.mycommand.definition + "'"
     Start-Process powershell -Verb runAs -ArgumentList $arguments
-    # REMOVED: La línea 'break' ha sido eliminada.
     Exit
 }
 
@@ -969,6 +968,7 @@ function Show-MainMenu {
 while ($true) {
     Show-MainMenu
 }
+
 
 
 
