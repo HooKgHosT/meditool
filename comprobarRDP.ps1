@@ -130,43 +130,105 @@ function Get-LastOutgoingRDPConnection {
 }
 
 function Get-FirewallStatus {
-    Write-Host "`nMostrando reglas de firewall de entrada activas (visibilidad optimizada para consolas)..." -ForegroundColor Yellow
-
-    try {
-        # Obtenemos todas las reglas de firewall activas que permiten conexiones de entrada.
-        # Filtramos para mostrar solo las que tienen un programa asociado para mayor relevancia.
-        $allRules = Get-NetFirewallRule | Where-Object { 
-            $_.Enabled -eq "True" -and ($_.Direction -eq "Inbound" -or $_.Direction -eq "Both") -and ($_.Action -eq "Allow") -and -not [string]::IsNullOrEmpty($_.ProgramName)
-        }
-
-        if ($allRules.Count -gt 0) {
-            Write-Host "Se encontraron las siguientes reglas de firewall:" -ForegroundColor Green
-
-            # Se usa ForEach-Object para procesar cada regla y formatear la salida en una sola linea.
-            $allRules | ForEach-Object {
-                $rule = $_
-                $displayName = $rule.DisplayName
-                
-                # Truncar DisplayName a un maximo de 25 caracteres para mantener la legibilidad.
-                if ($displayName.Length -gt 25) {
-                    $displayName = $displayName.Substring(0, 22) + "..."
-                }
-
-                $programName = Split-Path -Path $rule.ProgramName -Leaf
-
-                # Formato de salida mejorado
-                Write-Host "Regla: $displayName" -ForegroundColor White
-                Write-Host "  - Programa: $programName" -ForegroundColor Cyan
-                Write-Host "  - Protocolo: $($rule.Protocol)" -ForegroundColor Cyan
-                Write-Host "  - Puerto: $($rule.LocalPort)" -ForegroundColor Cyan
-                Write-Host "--------------------------------"
-            }
-        } else {
-            Write-Host "No se encontraron reglas de firewall que permitan conexiones entrantes." -ForegroundColor Green
-        }
+    $shouldContinue = $true
+    do {
+        Write-Host "`nMostrando reglas de firewall de entrada activas (visibilidad optimizada para consolas)..." -ForegroundColor Yellow
         
+        try {
+            $allRules = Get-NetFirewallRule | Where-Object { 
+                $_.Enabled -eq "True" -and ($_.Direction -eq "Inbound" -or $_.Direction -eq "Both") -and ($_.Action -eq "Allow") -and -not [string]::IsNullOrEmpty($_.ProgramName)
+            }
+
+            if ($allRules.Count -gt 0) {
+                Write-Host "Se encontraron las siguientes reglas de firewall:" -ForegroundColor Green
+                
+                $allRules | ForEach-Object {
+                    $rule = $_
+                    $programName = Split-Path -Path $rule.ProgramName -Leaf
+                    $process = Get-Process -Name $programName -ErrorAction SilentlyContinue | Select-Object -First 1
+                    $pid = if ($process) { $process.Id } else { "N/A" }
+                    
+                    Write-Host "Regla: $($rule.DisplayName)" -ForegroundColor White
+                    Write-Host "  - Programa: $programName" -ForegroundColor Cyan
+                    Write-Host "  - PID: $pid" -ForegroundColor Cyan
+                    Write-Host "  - Protocolo: $($rule.Protocol)" -ForegroundColor Cyan
+                    Write-Host "  - Puerto: $($rule.LocalPort)" -ForegroundColor Cyan
+                    Write-Host "--------------------------------"
+                }
+            } else {
+                Write-Host "No se encontraron reglas de firewall que permitan conexiones entrantes." -ForegroundColor Green
+            }
+        } catch {
+            Write-Host "Error al obtener las reglas del Firewall. Verifique si el comando se ejecuto con privilegios de Administrador y reintente." -ForegroundColor Red
+        }
+
+        # Menú de acciones
+        Write-Host "`n¿Qué desea hacer a continuación?" -ForegroundColor Cyan
+        Write-Host "1. Volver a escanear"
+        Write-Host "2. Cerrar un proceso por PID"
+        Write-Host "3. Bloquear un proceso por PID"
+        Write-Host "0. Volver al menú principal"
+        
+        $choice = Read-Host "Seleccione una opción"
+        
+        switch ($choice) {
+            "1" {
+                # Se repite el bucle, volviendo a escanear
+            }
+            "2" {
+                Write-Host "`nIngrese el PID del proceso que desea cerrar:" -ForegroundColor Yellow
+                $pidToClose = Read-Host "PID del proceso"
+                Stop-OrBlock-Process -pid $pidToClose -action "close"
+            }
+            "3" {
+                Write-Host "`nIngrese el PID del proceso que desea bloquear:" -ForegroundColor Yellow
+                $pidToBlock = Read-Host "PID del proceso"
+                Stop-OrBlock-Process -pid $pidToBlock -action "block"
+            }
+            "0" {
+                $shouldContinue = $false
+            }
+            default {
+                Write-Host "Opción no válida. Intente de nuevo." -ForegroundColor Red
+            }
+        }
+    } while ($shouldContinue)
+}
+
+function Stop-OrBlock-Process {
+    param (
+        [Parameter(Mandatory=$true)]
+        [int]$pid,
+        [Parameter(Mandatory=$true)]
+        [string]$action
+    )
+    
+    try {
+        $process = Get-Process -Id $pid -ErrorAction Stop
+        $processPath = $process.Path
+        $programName = Split-Path -Path $processPath -Leaf
+
+        if ($action -eq "close") {
+            Stop-Process -Id $pid -Force
+            Write-Host "Proceso '$programName' con PID $pid cerrado exitosamente." -ForegroundColor Green
+        } elseif ($action -eq "block") {
+            # Bloquear el trafico de salida (outbound) para el programa.
+            $ruleName = "Bloqueado por MediTool - $programName"
+            $existingRule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
+            
+            if (-not $existingRule) {
+                New-NetFirewallRule -DisplayName $ruleName -Direction Outbound -Program $processPath -Action Block
+                Write-Host "Regla de firewall creada para bloquear el programa '$programName'." -ForegroundColor Green
+            } else {
+                Write-Host "Una regla de firewall para '$programName' ya existe. No se realizaron cambios." -ForegroundColor Yellow
+            }
+            
+            Write-Host "Cerrando el proceso para aplicar el cambio..." -ForegroundColor Cyan
+            Stop-Process -Id $pid -Force
+            Write-Host "Proceso '$programName' con PID $pid cerrado exitosamente." -ForegroundColor Green
+        }
     } catch {
-        Write-Host "Error al obtener las reglas del Firewall. Verifique si el comando se ejecuto con privilegios de Administrador y reintente." -ForegroundColor Red
+        Write-Host "Error: No se pudo encontrar o manipular el proceso con el PID $pid. Verifique el PID y los permisos de Administrador." -ForegroundColor Red
     }
 }
 
@@ -1403,6 +1465,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
