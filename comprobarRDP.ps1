@@ -1142,27 +1142,14 @@ function Generate-HTMLReport {
 }
 
 function Get-UserInfo {
-    # Información del usuario y sistema
-    Write-Host "Informacion del Usuario y Sistema:" -ForegroundColor Yellow
-    Write-Host "  - Usuario actual: $($env:USERNAME)"
-    Write-Host "  - Nombre del equipo: $($env:COMPUTERNAME)"
-
-    # Obtener administradores locales de forma fiable usando el SID
-    Write-Host "`nInformacion de Administradores Locales:" -ForegroundColor Cyan
+    $adminMembers = @()
     try {
         $adminGroup = (Get-LocalGroup | Where-Object { $_.SID -eq "S-1-5-32-544" }).Name
         if ($adminGroup) {
-            $admins = (Get-LocalGroupMember -Group $adminGroup -ErrorAction Stop).Name
-            Write-Host "  - Administradores locales: $([string]::join(', ', $admins))"
-        } else {
-            Write-Host "  - No se pudo encontrar el grupo de administradores locales." -ForegroundColor Red
+            $adminMembers = (Get-LocalGroupMember -Group $adminGroup -ErrorAction Stop).Name
         }
-    } catch {
-        Write-Host "  - No se pudieron obtener los administradores locales. Asegurese de tener permisos de Administrador." -ForegroundColor Red
-    }
+    } catch {}
     
-    # Obtener informacion de la red y los adaptadores
-    Write-Host "`nInformacion de Adaptadores de Red:" -ForegroundColor Cyan
     $networkAdapters = @()
     try {
         $adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' -and $_.Virtual -eq $false }
@@ -1178,22 +1165,17 @@ function Get-UserInfo {
                     "Subred" = if ($ipAddress) { $ipAddress.PrefixLength } else { "N/A" }
                 }
             }
-            if ($networkAdapters.Count -gt 0) {
-                $networkAdapters | Format-Table -AutoSize
-            } else {
-                Write-Host "  - No se encontraron adaptadores de red fisicos activos." -ForegroundColor Red
-            }
-        } else {
-            Write-Host "  - No se encontraron adaptadores de red fisicos activos." -ForegroundColor Red
         }
-    } catch {
-        Write-Host "Error al obtener informacion de los adaptadores de red." -ForegroundColor Red
+    } catch {}
+
+    $info = [PSCustomObject]@{
+        "UsuarioActual" = $env:USERNAME
+        "NombreEquipo" = $env:COMPUTERNAME
+        "AdministradoresLocales" = $adminMembers
+        "Redes" = $networkAdapters
     }
-
-    Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
-    Read-Host | Out-Null
+    return $info
 }
-
 function Set-WindowFocus {
     $code = '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);'
     $showWindow = Add-Type -MemberDefinition $code -Name "Win32ShowWindow" -Namespace "Win32Functions" -PassThru
@@ -1568,6 +1550,7 @@ while ($true) {
 }
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
