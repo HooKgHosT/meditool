@@ -366,33 +366,19 @@ function Analyze-PasswordPolicy {
         $results | Format-Table -AutoSize
 
     } catch {
-        Write-Host "No se pudo obtener la politica de contrasenas del dominio. Usando el metodo local 'net accounts'." -ForegroundColor Yellow
-        $output = net accounts 2>$null
+        Write-Host "No se pudo obtener la politica de contrasenas del dominio. Usando el metodo local (WMI)." -ForegroundColor Yellow
+
+        # Usar WMI para obtener la politica de cuentas locales
+        $localPolicy = Get-CimInstance -ClassName Win32_UserAccount -Filter "Name='$env:USERNAME'"
+        $passwordSettings = Get-CimInstance -ClassName Win32_AccountPasswordSettings
 
         $resultsTable = @()
-        $foundData = $false
-        
-        # Analiza la salida de 'net accounts'
-        $lines = $output | Select-String -Pattern "Longitud minima|Complejidad|Historial|Antiguedad" -CaseSensitive
+        $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Longitud Minima"; "Valor" = $passwordSettings.MinimumPasswordLength }
+        $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Complejidad"; "Valor" = if ($passwordSettings.PasswordComplexity -eq "true") { "Habilitada" } else { "Deshabilitada" } }
+        $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Historial"; "Valor" = $passwordSettings.PasswordHistorySize }
+        $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Antiguedad Maxima (dias)"; "Valor" = $passwordSettings.MaximumPasswordAge }
 
-        if ($lines) {
-            $foundData = $true
-            $minLen = ($lines | Where-Object { $_.Line -like "*Longitud minima*" }).Line.Split(':')[1].Trim()
-            $complexity = ($lines | Where-Object { $_.Line -like "*La complejidad*" }).Line.Split(':')[1].Trim()
-            $history = ($lines | Where-Object { $_.Line -like "*historial*" }).Line.Split(':')[1].Trim()
-            $maxAge = ($lines | Where-Object { $_.Line -like "*Antiguedad maxima*" }).Line.Split(':')[1].Trim()
-            
-            $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Longitud Minima"; "Valor" = $minLen }
-            $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Complejidad"; "Valor" = $complexity }
-            $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Historial"; "Valor" = $history }
-            $resultsTable += [PSCustomObject]@{ "Parametro de Seguridad" = "Antiguedad Maxima (dias)"; "Valor" = $maxAge }
-        }
-
-        if ($foundData) {
-            $resultsTable | Format-Table -AutoSize
-        } else {
-            Write-Host "La informacion de politica de contrasenas no esta disponible para este equipo." -ForegroundColor Red
-        }
+        $resultsTable | Format-Table -AutoSize
     }
 }
 
@@ -1477,6 +1463,7 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
 
 
 
