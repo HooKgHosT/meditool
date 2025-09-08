@@ -704,7 +704,7 @@ function Analyze-NetworkConnections {
                                     }
                                     "0" {
                                         $postCloseMenu = $false
-                                        $actionMenu = false
+                                        $actionMenu = $false
                                     }
                                     default {
                                         Write-Host "Opcion no valida. Intente de nuevo." -ForegroundColor Red
@@ -1118,22 +1118,26 @@ function Clean-TempFolder {
 function Show-MainMenu {
     Clear-Host
     Write-Host "
-         ______   ______  ______  ______   ______  ______  ______    ______  
-      | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
-      |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
-      |______| |______||______||______| |______||______||______|  |______| 
-       ______  				                      ______
-      | |__| |   _  _   ____  ___   __  _____  ____   ____  _     | |__| | 
-      |  ()  |  | \/ | |____||_  \ \__/|_ _ _| / _  \/ _  \| |    |  ()  | 
-      |______|  | || | | _|  | |  | ||   | |  | |.| | |.|  | |    |______| 
-       ______   | || | |__|_ |_|  | ||   | |  | |_| | |_|  | |_    ______
-      | |__| |  |_||_| |____||___/ /__\  |_|   \____/\____/|___|  | |__| | 
-      | () | | 				                     |  ()  | 
-      |______| 					             |______| 
-       ______   ______  ______  ______   ______  ______  ______    ______  
-      | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
-      |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
-      |______| |______||______||______| |______||______||______|  |______|" -ForegroundColor Cyan
+                 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+                |                                                                                 |
+                |   _______ _            _           _        _   _                              |
+                |  |  _____| |          | |         | |      | \ | |                             |
+                |  | |  ___| |__   _ __ | | __ _ ___| |_ __ _|  \| | _____      _____             |
+                |  | | |_  | '_ \ | '_ \| |/ _  / __| __/ _` | . ` |/ _ \ \ /\ / / __|            |
+                |  | | |___| | | || |_) | | (_| \__ \ || (_| | |\  | (_) \ V  V /\__ \            |
+                |  |_|______|_| |_|| .__/|_|\__,_|___/\__\__,_|_| \_|\___/ \_/\_/ |___/            |
+                |                  | |                                                             |
+                |                  |_|                                                             |
+                |   ______         _       _                                                      |
+                |  |  ____|       (_)     | |                                                     |
+                |  | |__ __      ___ _ __ | | ___  _   _ ___                                      |
+                |  |  __| \ \ /\ / / | '_ \| |/ _ \| | | / __|                                     |
+                |  | |____ \ V  V /| | | | | | (_) | |_| \__ \                                     |
+                |  |_|_____\_/\_/ |_|_| |_|_|\___/ \__,_|___/                                     |
+                |                                                                                 |
+                |                       Copyright (c) 2023 h00kGh0st                             |
+                |                                                                                 |
+                |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|" -ForegroundColor Red
     Write-Host "=============================================" -ForegroundColor Green
     Write-Host "=                                           =" -ForegroundColor Green
     Write-Host "=        Herramienta de Seguridad MediTool  =" -ForegroundColor Green
@@ -1252,75 +1256,83 @@ function Show-MainMenu {
         }
         "15" {
             Write-Host "
-                 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-                |                                                                                 |
-                |   _______ _            _           _        _   _                              |
-                |  |  _____| |          | |         | |      | \ | |                             |
-                |  | |  ___| |__   _ __ | | __ _ ___| |_ __ _|  \| | _____      _____             |
-                |  | | |_  | '_ \ | '_ \| |/ _  / __| __/ _` | . ` |/ _ \ \ /\ / / __|            |
-                |  | | |___| | | || |_) | | (_| \__ \ || (_| | |\  | (_) \ V  V /\__ \            |
-                |  |_|______|_| |_|| .__/|_|\__,_|___/\__\__,_|_| \_|\___/ \_/\_/ |___/            |
-                |                  | |                                                           |
-                |                  |_|                                                           |
-                |   ______         _       _                                                      |
-                |  |  ____|       (_)     | |                                                     |
-                |  | |__ __      ___ _ __ | | ___  _   _ ___                                      |
-                |  |  __| \ \ /\ / / | '_ \| |/ _ \| | | / __|                                     |
-                |  | |____ \ V  V /| | | | | | (_) | |_| \__ \                                     |
-                |  |_|_____\_/\_/ |_|_| |_|_|\___/ \__,_|___/                                     |
-                |                                                                                 |
-                |                       Copyright (c) 2023 h00kGh0st                             |
-                |                                                                                 |
-                |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|" -ForegroundColor Red
-        }
-        "16" {
-            Find-HiddenFilesAndScan
-        }
-        "17" {
-            Audit-FailedLogons
-        }
-        "18" {
-            Activate-Windows
-        }
-        "19" {
-            Generate-HTMLReport
-        }
-        "20" {
-            $info = Get-UserInfo
-            Write-Host "`nInformacion del Usuario y Sistema:" -ForegroundColor Yellow
-            Write-Host "  - Usuario actual: $($info.UsuarioActual)"
-            Write-Host "  - Nombre del equipo: $($info.NombreEquipo)"
-            
-            $administrators = if ($info.AdministradoresLocales.Count -gt 0) {
-                [string]::join(', ', $info.AdministradoresLocales)
-            } else {
-                "No se pudieron obtener los administradores locales."
-            }
-            Write-Host "  - Administradores locales: $administrators"
+                 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+                |                                                                                 |
+                |   _______ _            _           _        _   _                              |
+                |  |  _____| |          | |         | |      | \ | |                             |
+                |  | |  ___| |__   _ __ | | __ _ ___| |_ __ _|  \| | _____      _____             |
+                |  | | |_  | '_ \ | '_ \| |/ _  / __| __/ _` | . ` |/ _ \ \ /\ / / __|            |
+                |  | | |___| | | || |_) | | (_| \__ \ || (_| | |\  | (_) \ V  V /\__ \            |
+                |  |_|______|_| |_|| .__/|_|\__,_|___/\__\__,_|_| \_|\___/ \_/\_/ |___/            |
+                |                  | |                                                             |
+                |                  |_|                                                             |
+                |   ______         _       _                                                      |
+                |  |  ____|       (_)     | |                                                     |
+                |  | |__ __      ___ _ __ | | ___  _   _ ___                                      |
+                |  |  __| \ \ /\ / / | '_ \| |/ _ \| | | / __|                                     |
+                |  | |____ \ V  V /| | | | | | (_) | |_| \__ \                                     |
+                |  |_|_____\_/\_/ |_|_| |_|_|\___/ \__,_|___/                                     |
+                |                                                                                 |
+                |                       Copyright (c) 2023 h00kGh0st                             |
+                |                                                                                 |
+                |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|" -ForegroundColor Red
+        }
+        "16" {
+            Find-HiddenFilesAndScan
+        }
+        "17" {
+            Audit-FailedLogons
+        }
+        "18" {
+            Activate-Windows
+        }
+        "19" {
+            Generate-HTMLReport
+        }
+        "20" {
+            $info = Get-UserInfo
+            Write-Host "`nInformacion del Usuario y Sistema:" -ForegroundColor Yellow
+            Write-Host "  - Usuario actual: $($info.UsuarioActual)"
+            Write-Host "  - Nombre del equipo: $($info.NombreEquipo)"
+            
+            $administrators = if ($info.AdministradoresLocales.Count -gt 0) {
+                [string]::join(', ', $info.AdministradoresLocales)
+            } else {
+                "No se pudieron obtener los administradores locales."
+            }
+            Write-Host "  - Administradores locales: $administrators"
 
-            Write-Host "`nInformacion de Adaptadores de Red:" -ForegroundColor Cyan
-            if ($info.Redes.Count -gt 0) {
-                $info.Redes | Format-Table -AutoSize
-            } else {
-                Write-Host "  - No se encontraron adaptadores de red activos." -ForegroundColor Red
-            }
-        }
-        "21" {
-            MacChangerMenu
-        }
-        "22" {
-            Update-AllWingetApps
-        }
-        "0" {
-            Clean-TempFolder # Llamada a la funcion de limpieza
-            Write-Host "Saliendo del programa. ¡Adios!" -ForegroundColor Green
-            exit
-        }
-        default {
-            Write-Host "Opcion no valida. Por favor, intente de nuevo." -ForegroundColor Red
-        }
-    }
+            Write-Host "`nInformación de Adaptadores de Red:" -ForegroundColor Cyan
+            if ($info.Redes.Count -gt 0) {
+                $info.Redes | Format-Table -AutoSize
+            } else {
+                Write-Host "  - No se encontraron adaptadores de red activos." -ForegroundColor Red
+            }
+        }
+        "21" {
+            MacChangerMenu
+        }
+        "22" {
+            Update-AllWingetApps
+        }
+        "0" {
+            Clean-TempFolder
+            Write-Host "Saliendo del programa. ¡Adios!" -ForegroundColor Green
+            exit
+        }
+        default {
+            Write-Host "Opción no válida. Por favor, intente de nuevo." -ForegroundColor Red
+        }
+    }
 
-    Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
-    Read-Host | Out-Null
+    Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+    Read-Host | Out-Null
 }
+
+# Iniciar el bucle del menú
+while ($true) {
+    Show-MainMenu
+}
+
+Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
+Read-Host | Out-Null
