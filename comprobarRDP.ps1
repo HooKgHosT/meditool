@@ -704,7 +704,7 @@ function Analyze-NetworkConnections {
                                     }
                                     "0" {
                                         $postCloseMenu = $false
-                                        $actionMenu = $false
+                                        $actionMenu = false
                                     }
                                     default {
                                         Write-Host "Opcion no valida. Intente de nuevo." -ForegroundColor Red
@@ -723,7 +723,7 @@ function Analyze-NetworkConnections {
                     Write-Host "Operacion de cierre cancelada." -ForegroundColor Red
                 }
             } else {
-                $actionMenu = $false
+                $actionMenu = false
             }
         } while ($actionMenu)
         
@@ -1113,7 +1113,6 @@ function Clean-TempFolder {
         Write-Host "Error al limpiar la carpeta TEMP. Algunos archivos pueden estar en uso." -ForegroundColor Red
     }
 }
-
 function Check-ISO27001Status {
     Write-Host "
     ========================================================
@@ -1171,23 +1170,33 @@ function Check-ISO27001Status {
 # --- MENÚ PRINCIPAL ---
 function Show-MainMenu {
     Clear-Host
+    # DIBUJO DE JERINGA ASCII HORIZONTAL
     Write-Host "
-%         ______   ______  ______  ______   ______  ______  ______    ______  
-%      | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
-%      |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
-%      |______| |______||______||______| |______||______||______|  |______| 
-%       ______  				                      ______
-%      | |__| |   _  _   ____  ___   __  _____  ____   ____  _     | |__| | 
-%      |  ()  |  | \/ | |____||_  \ \__/|_ _ _| / _  \/ _  \| |    |  ()  | 
-%      |______|  | || | | _|  | |  | ||   | |  | |.| | |.|  | |    |______| 
-%       ______   | || | |__|_ |_|  | ||   | |  | |_| | |_|  | |_    ______
-%      | |__| |  |_||_| |____||___/ /__\  |_|   \____/\____/|___|  | |__| | 
-%      | () | | 				                     |  ()  | 
-%      |______| 					             |______| 
-%       ______   ______  ______  ______   ______  ______  ______    ______  
-%      | |__| | | |__| || |__| || |__| | | |__| || |__| || |__| |  | |__| | 
-%      |  ()  | |  ()  ||  ()  ||  ()  | |  ()  ||  ()  ||  ()  |  |  ()  | 
-%      |______| |______||______||______| |______||______||______|  |______| Copyright [c] 2023 - H00kGh0st" -ForegroundColor Cyan
+                 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+                |                                                                                 |
+                |   _______ _            _           _        _   _                              |
+                |  |  _____| |          | |         | |      | \ | |                             |
+                |  | |  ___| |__   _ __ | | __ _ ___| |_ __ _|  \| | _____      _____             |
+                |  | | |_  | '_ \ | '_ \| |/ _  / __| __/ _` | . ` |/ _ \ \ /\ / / __|            |
+                |  | | |___| | | || |_) | | (_| \__ \ || (_| | |\  | (_) \ V  V /\__ \            |
+                |  |_|______|_| |_|| .__/|_|\__,_|___/\__\__,_|_| \_|\___/ \_/\_/ |___/            |
+                |                  | |                                                             |
+                |                  |_|                                                             |
+                |   ______         _       _                                                      |
+                |  |  ____|       (_)     | |                                                     |
+                |  | |__ __      ___ _ __ | | ___  _   _ ___                                      |
+                |  |  __| \ \ /\ / / | '_ \| |/ _ \| | | / __|                                     |
+                |  | |____ \ V  V /| | | | | | (_) | |_| \__ \                                     |
+                |  |_|_____\_/\_/ |_|_| |_|_|\___/ \__,_|___/                                     |
+                |                                                                                 |
+                |                       Copyright (c) 2023 h00kGh0st                             |
+                |                                                                                 |
+                |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|" -ForegroundColor Red
+    Write-Host "=============================================" -ForegroundColor Green
+    Write-Host "=                                           =" -ForegroundColor Green
+    Write-Host "=        Herramienta de Seguridad MediTool  =" -ForegroundColor Green
+    Write-Host "=                                           =" -ForegroundColor Green
+    Write-Host "=============================================" -ForegroundColor Green
     Write-Host "Bienvenido a MediTool, tu solución de seguridad Blue Team."
     Write-Host "Por favor, selecciona una opción del menú:"
     Write-Host ""
@@ -1385,7 +1394,3 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
-
-
-
-
