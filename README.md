@@ -38,9 +38,9 @@ Este proyecto está bajo la licencia MIT. Puedes ver el archivo LICENSE para má
 
 Para sugerencias, reportes de errores o si quieres contribuir, puedes contactarme a través de:
 
-GitHub: @HooKgHosT
+GitHub: <a href="https://github.com/HooKgHosT">@HooKgHosT</a>
 
-LinkedIn: D4N1FEIJ00
+LinkedIn: <a href="https://www.linkedin.com/in/d4n1feij00/">D4N1FEIJ00</a>
 
-Discord: Me puedes encontrar como ELMOnymous en el servidor de EvilSec.
+Discord: Me puedes encontrar como <strong>ELMOnymous</strong> en el servidor de EvilSec.
 
