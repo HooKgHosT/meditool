@@ -742,9 +742,16 @@ function Find-HiddenFilesAndScan {
     foreach ($path in $suspiciousPaths) {
         if (Test-Path -Path $path) {
             Write-Host "Analizando ruta: $path"
-            $foundFiles += Get-ChildItem -Path $path -Recurse -Hidden -Force -ErrorAction SilentlyContinue | Where-Object { !$_.PSIsContainer }
+            try {
+                # Se utiliza el try/catch para manejar errores de acceso a carpetas protegidas
+                $foundFiles += Get-ChildItem -Path $path -Recurse -Hidden -Force -ErrorAction Stop | Where-Object { !$_.PSIsContainer }
+            }
+            catch {
+                # Ignorar errores de acceso a carpetas, pero notificar si es necesario
+                Write-Host "Advertencia: No se pudo acceder a la ruta '$path' debido a permisos insuficientes. Se omite." -ForegroundColor Gray
+            }
         } else {
-            Write-Host "Advertencia: La ruta '$path' no existe o no se puede acceder a ella. Se omite." -ForegroundColor Gray
+            Write-Host "Advertencia: La ruta '$path' no existe. Se omite." -ForegroundColor Gray
         }
     }
     
@@ -1249,3 +1256,4 @@ while ($true) {
 
 Write-Host "Presiona Enter para salir..." -ForegroundColor Yellow
 Read-Host | Out-Null
+
