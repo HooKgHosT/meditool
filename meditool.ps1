@@ -1307,11 +1307,10 @@ function Check-ISO27001Status {
 # --- MENÚ PRINCIPAL ---
 function Show-MainMenu {
     Clear-Host
-    Write-Host "`n=====================================================" -ForegroundColor Green
+    Write-Host "=============================================" -ForegroundColor Green
     Write-Host "=         Herramienta de Auditoría MediTool         =" -ForegroundColor Green
-    Write-Host "=====================================================" -ForegroundColor Green
-    Write-Host "Versión 1.4.0 (Final) - por h00kGh0st"
-    Write-Host ""
+    Write-Host "=============================================" -ForegroundColor Green
+    Write-Host "Versión 3.3.0 (Final) - por h00kGh0st & Programeta`n"
     
     $menuOptions = @(
         [PSCustomObject]@{ "ID" = 1; "Opcion" = "Revisar Estado de RDP y Ultimas Conexiones" },
@@ -1322,12 +1321,12 @@ function Show-MainMenu {
         [PSCustomObject]@{ "ID" = 6; "Opcion" = "Buscar Tareas Programadas Maliciosas" },
         [PSCustomObject]@{ "ID" = 7; "Opcion" = "Auditar Servicios No Esenciales" },      
         [PSCustomObject]@{ "ID" = 8; "Opcion" = "Buscar Cuentas de Usuario Inactivas" },
-        [PSCustomObject]@{ "ID" = 9; "Opcion" = "Verificar Firmas de Archivos Criticos" },
+        [PSCustomObject]@{ "ID" = 9; "Opcion" = "Verificar Firmas y Analizar Archivos (VirusTotal)" },
         [PSCustomObject]@{ "ID" = 10; "Opcion" = "Verificar Procesos en Ejecucion sin Firma" },
         [PSCustomObject]@{ "ID" = 11; "Opcion" = "Detener Procesos Sin Firma" },
         [PSCustomObject]@{ "ID" = 12; "Opcion" = "Bloquear Ejecucion de Archivo" },
         [PSCustomObject]@{ "ID" = 13; "Opcion" = "Auditar Registro de Inicio Automatico (Autorun)" },
-        [PSCustomObject]@{ "ID" = 14; "Opcion" = "Analizar Conexiones de Red" },
+        [PSCustomObject]@{ "ID" = 14; "Opcion" = "Analizar Conexiones de Red (Detallado)" },
         [PSCustomObject]@{ "ID" = 16; "Opcion" = "Buscar Archivos Ocultos" },
         [PSCustomObject]@{ "ID" = 17; "Opcion" = "Auditar Inicios de Sesion Fallidos" },
         [PSCustomObject]@{ "ID" = 19; "Opcion" = "Generar Reporte de Seguridad (HTML)" },
@@ -1337,7 +1336,7 @@ function Show-MainMenu {
         [PSCustomObject]@{ "ID" = 24; "Opcion" = "Limpiar Archivos Temporales del Sistema" },
         [PSCustomObject]@{ "ID" = 25; "Opcion" = "Buscar Archivos de 0 Bytes" },
         [PSCustomObject]@{ "ID" = 26; "Opcion" = "Analizar Memoria del Sistema" },
-        [PSCustomObject]@{ "ID" = 27; "Opcion" = "Realizar Análisis Completo del Sistema (Necesario para Reporte)" },
+        [PSCustomObject]@{ "ID" = 27; "Opcion" = "Realizar Análisis Completo del Sistema para Reporte" },
         [PSCustomObject]@{ "ID" = 28; "Opcion" = "Realizar Chequeo Anti-PEAS (Hardening)" },
         [PSCustomObject]@{ "ID" = 29; "Opcion" = "Realizar Chequeo Anti-Robo-Credenciales (Hardening)" },
         [PSCustomObject]@{ "ID" = 30; "Opcion" = "Auditar Eventos Críticos (Borrado de Logs)" },
@@ -1347,58 +1346,71 @@ function Show-MainMenu {
         [PSCustomObject]@{ "ID" = 0; "Opcion" = "Salir" }
     )
     
-    $script:menuOptions = $menuOptions 
-    $menuOptions | Format-Table -Property @{Expression="ID"; Width=4}, Opcion -HideTableHeaders
+    $script:menuOptions = $menuOptions
     
-    $selection = Read-Host "Ingresa el numero de la opcion que deseas ejecutar"
-    return $selection
+    # Corrección para forzar la visualización del menú antes del prompt
+    $menuOptions | Format-Table -Property @{Expression="ID"; Width=4}, Opcion -HideTableHeaders | Out-String | Write-Host
+    
+    return Read-Host "Ingresa el numero de la opcion que deseas ejecutar"
 }
-# El script ahora inicia directamente en el menú.
-# La función Capture-InitialState se llama desde la Opción 27 o desde la 19 (Reporte).
-# --- BUCLE PRINCIPAL ---
-    Write-Host "El script se está ejecutando con permisos de Administrador." -ForegroundColor Green
-    # (Captura de estado inicial)
-    # Capture-InitialState # Puedes descomentar esto si quieres que se ejecute al inicio
 
+
+# --- INICIO DEL SCRIPT Y BUCLE PRINCIPAL ---
+
+# Inicia el bucle interactivo solo si el script tiene permisos de administrador
+if (Test-AdminPrivileges) {
+
+    # 1. Capturar estado inicial de forma no interactiva
+    Write-Host "El script se está ejecutando con permisos de Administrador." -ForegroundColor Green
+    Capture-InitialState
+
+    # 2. Iniciar el bucle del menú interactivo
     while ($true) {
         $selection = Show-MainMenu
         
-        switch ($selection) {
-        "1" { Get-RDPStatus }
-        "2" { Get-FirewallStatus }
-        "3" { Fix-FirewallPorts }
-        "4" { Manage-RDP }
-        "5" { Manage-WindowsTelemetry }
-        "6" { Find-MaliciousScheduledTasks | Format-Table -AutoSize }
-        "7" { Audit-NonEssentialServices }
-        "8" { Find-InactiveUsers | Format-Table -AutoSize }
-        "9" { Verify-FileSignatures }
-        "10" { Find-UnsignedProcesses | Format-Table -AutoSize }
-        "11" { Stop-SuspiciousProcess }
-        "12" { Block-FileExecution }
-        "13" { Manage-RegistryAutorun }
-        "14" { Analyze-NetworkConnections }
-        "16" { Find-HiddenFilesAndScan }
-        "17" { Audit-FailedLogons }
-        "19" { Generate-HTMLReport }
-        "20" { Get-UserInfo | Format-List }
-        "22" { Update-AllWingetApps }
-        "23" { Check-ISO27001Status }
-        "24" { Clean-SystemJunk }
-        "25" { Find-OrphanedAndZeroByteFiles }
-        "26" { Analyze-SystemMemory }
-        "27" {
-            Write-Host "Iniciando análisis completo del sistema. Esto puede tardar varios minutos..." -ForegroundColor Yellow
-            Capture-InitialState
-            Write-Host "Análisis completo y captura de estado finalizados." -ForegroundColor Green
+        # Registrar la acción del usuario en el log
+        $optionObject = $script:menuOptions | Where-Object { $_.ID -eq $selection }
+        if ($optionObject) {
+            Add-LogEntry -Message "Usuario seleccionó la opción '$($selection)': $($optionObject.Opcion)"
         }
-        "28" { Invoke-PeasHardeningChecks }
-        "29" { Invoke-CredentialHardeningChecks }
-        "30" { Invoke-CriticalEventsAudit }
-        "31" { Invoke-LocalPolicyChecks }
-        "88" { Activate-Windows }
-        "99" { Write-Host "Copyright (c) 2023 h00kGh0st" -ForegroundColor Cyan }
-        "0" {
+
+        # Lógica para cada opción del menú
+        switch ($selection) {
+            "1" { Get-RDPStatus }
+            "2" { Get-FirewallStatus }
+            "3" { Fix-FirewallPorts }
+            "4" { Manage-RDP }
+            "5" { Manage-WindowsTelemetry }
+            "6" { Find-MaliciousScheduledTasks | Format-Table -AutoSize }
+            "7" { Audit-NonEssentialServices }
+            "8" { Find-InactiveUsers | Format-Table -AutoSize }
+            "9" { Verify-FileSignatures }
+            "10" { Find-UnsignedProcesses | Format-Table -AutoSize }
+            "11" { Stop-SuspiciousProcess }
+            "12" { Block-FileExecution }
+            "13" { Manage-RegistryAutorun }
+            "14" { Analyze-NetworkConnections }
+            "16" { Find-HiddenFilesAndScan }
+            "17" { Audit-FailedLogons }
+            "19" { Generate-HTMLReport }
+            "20" { Get-UserInfo | Format-List }
+            "22" { Update-AllWingetApps }
+            "23" { Check-ISO27001Status }
+            "24" { Clean-SystemJunk }
+            "25" { Find-OrphanedAndZeroByteFiles }
+            "26" { Analyze-SystemMemory }
+            "27" {
+                Write-Host "Iniciando análisis completo del sistema..." -ForegroundColor Yellow
+                Capture-InitialState
+                Write-Host "Análisis completo y captura de estado finalizados." -ForegroundColor Green
+            }
+            "28" { Invoke-PeasHardeningChecks }
+            "29" { Invoke-CredentialHardeningChecks }
+            "30" { Invoke-CriticalEventsAudit }
+            "31" { Invoke-LocalPolicyChecks }
+            "88" { Activate-Windows }
+            "99" { Write-Host "Copyright (c) 2023 h00kGh0st" -ForegroundColor Cyan }
+            "0" {
                 Clean-ScriptFromTemp
                 Write-Host "Saliendo del programa. ¡Adiós!" -ForegroundColor Green
                 Start-Sleep -Seconds 1
@@ -1409,9 +1421,10 @@ function Show-MainMenu {
             }
         }
 
+        # Pausa para que el usuario pueda ver el resultado antes de volver al menú
         if ($selection -ne "0") {
             Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
             Read-Host | Out-Null
         }
     }
-}
+} # --- FIN DEL BLOQUE QUE REQUIERE PERMISOS DE ADMINISTRADOR ---
