@@ -99,70 +99,37 @@ function Get-LastOutgoingRDPConnection {
 }
 
 function Get-FirewallStatus {
-    $shouldContinue = $true
-    do {
-        Write-Host "`nMostrando reglas de firewall de entrada activas (visibilidad optimizada para consolas)..." -ForegroundColor Yellow
-        
-        try {
-            $allRules = Get-NetFirewallRule | Where-Object { 
-                $_.Enabled -eq "True" -and ($_.Direction -eq "Inbound" -or $_.Direction -eq "Both") -and ($_.Action -eq "Allow")
-            }
+    Write-Host "`nMostrando reglas de firewall de entrada activas (visibilidad optimizada para consolas)..." -ForegroundColor Yellow
+    
+    try {
+        $allRules = Get-NetFirewallRule | Where-Object { 
+            $_.Enabled -eq "True" -and ($_.Direction -eq "Inbound" -or $_.Direction -eq "Both") -and ($_.Action -eq "Allow") -and -not [string]::IsNullOrEmpty($_.ProgramName)
+        }
 
-            if ($allRules.Count -gt 0) {
-                Write-Host "Se encontraron las siguientes reglas de firewall:" -ForegroundColor Green
+        if ($allRules.Count -gt 0) {
+            Write-Host "Se encontraron las siguientes reglas de firewall:" -ForegroundColor Green
+            
+            $allRules | ForEach-Object {
+                $rule = $_
+                $programName = Split-Path -Path $rule.ProgramName -Leaf
+                $process = Get-Process -Name $programName -ErrorAction SilentlyContinue | Select-Object -First 1
+                $pid = if ($process) { $process.Id } else { "N/A" }
                 
-                $allRules | ForEach-Object {
-                    $rule = $_
-                    $programName = Split-Path -Path $rule.ProgramName -Leaf
-                    $process = Get-Process -Name $programName -ErrorAction SilentlyContinue | Select-Object -First 1
-                    $pid = if ($process) { $process.Id } else { "N/A" }
-                    
-                    Write-Host "Regla: $($rule.DisplayName)" -ForegroundColor White
-                    Write-Host "  - Programa: $programName" -ForegroundColor Cyan
-                    Write-Host "  - PID: $pid" -ForegroundColor Cyan
-                    Write-Host "  - Protocolo: $($rule.Protocol)" -ForegroundColor Cyan
-                    Write-Host "  - Puerto: $($rule.LocalPort)" -ForegroundColor Cyan
-                    Write-Host "--------------------------------"
-                }
-            } else {
-                Write-Host "No se encontraron reglas de firewall que permitan conexiones entrantes." -ForegroundColor Green
+                Write-Host "Regla: $($rule.DisplayName)" -ForegroundColor White
+                Write-Host "  - Programa: $programName" -ForegroundColor Cyan
+                Write-Host "  - PID: $pid" -ForegroundColor Cyan
+                Write-Host "  - Protocolo: $($rule.Protocol)" -ForegroundColor Cyan
+                Write-Host "  - Puerto: $($rule.LocalPort)" -ForegroundColor Cyan
+                Write-Host "--------------------------------"
             }
-        } catch {
-            Write-Host "Error al obtener las reglas del Firewall. Verifique si el comando se ejecutó con privilegios de Administrador y reintente." -ForegroundColor Red
+        } else {
+            Write-Host "No se encontraron reglas de firewall que permitan conexiones entrantes." -ForegroundColor Green
         }
-
-        # Menú de acciones
-        Write-Host "`n¿Qué desea hacer a continuación?" -ForegroundColor Cyan
-        Write-Host "1. Volver a escanear"
-        Write-Host "2. Cerrar un proceso por PID"
-        Write-Host "3. Bloquear un proceso por PID"
-        Write-Host "0. Volver al menú principal"
-        
-        $choice = Read-Host "Seleccione una opción"
-        
-        switch ($choice) {
-            "1" {
-                # Se repite el bucle, volviendo a escanear
-            }
-            "2" {
-                Write-Host "`nIngrese el PID del proceso que desea cerrar:" -ForegroundColor Yellow
-                $pidToClose = Read-Host "PID del proceso"
-                Stop-OrBlock-Process -pid $pidToClose -action "close"
-            }
-            "3" {
-                Write-Host "`nIngrese el PID del proceso que desea bloquear:" -ForegroundColor Yellow
-                $pidToBlock = Read-Host "PID del proceso"
-                Stop-OrBlock-Process -pid $pidToBlock -action "block"
-            }
-            "0" {
-                $shouldContinue = $false
-            }
-            default {
-                Write-Host "Opción no válida. Intente de nuevo." -ForegroundColor Red
-            }
-        }
-    } while ($shouldContinue)
+    } catch {
+        Write-Host "Error al obtener las reglas del Firewall. Verifique si el comando se ejecutó con privilegios de Administrador y reintente." -ForegroundColor Red
+    }
 }
+
 
 function Stop-OrBlock-Process {
     param (
@@ -965,23 +932,30 @@ function Audit-FailedLogons {
     Write-Host "`nAuditando inicios de sesion fallidos de las ultimas 24 horas..." -ForegroundColor Yellow
     $lastDay = (Get-Date).AddDays(-1)
     
-    # Se obtiene el registro de eventos de forma segura.
-    # El parametro -ErrorAction SilentlyContinue evita que el script se detenga
-    # si no se encuentran eventos, lo que resuelve el error.
-    $failedLogons = Get-WinEvent -FilterHashtable @{ 
-        Logname = 'Security'; 
-        Id = 4625; 
-        StartTime = $lastDay 
-    } -ErrorAction SilentlyContinue | Select-Object TimeCreated, @{ Name = 'Usuario'; Expression = { $_.Properties[5].Value } }, @{ Name = 'Origen'; Expression = { $_.Properties[18].Value } }
-    
-    if ($failedLogons.Count -gt 0) {
-        Write-Host "Se encontraron los siguientes intentos de inicio de sesion fallidos:" -ForegroundColor Red
-        $failedLogons | Format-Table -AutoSize
-    } else {
-        Write-Host "No se encontraron intentos de inicio de sesion fallidos en las ultimas 24 horas." -ForegroundColor Green
+    try {
+        # Se obtiene el registro de eventos de forma segura dentro de un bloque try.
+        $failedLogons = Get-WinEvent -FilterHashtable @{ 
+            Logname = 'Security'; 
+            Id = 4625; 
+            StartTime = $lastDay 
+        } -ErrorAction Stop | Select-Object TimeCreated, @{ Name = 'Usuario'; Expression = { $_.Properties[5].Value } }, @{ Name = 'Origen'; Expression = { $_.Properties[18].Value } }
+        
+        if ($failedLogons.Count -gt 0) {
+            Write-Host "Se encontraron los siguientes intentos de inicio de sesion fallidos:" -ForegroundColor Red
+            $failedLogons | Format-Table -AutoSize
+        } else {
+            Write-Host "No se encontraron intentos de inicio de sesion fallidos en las ultimas 24 horas." -ForegroundColor Green
+        }
+    } catch {
+        # Si no se encuentran eventos, el error es capturado y se muestra el mensaje amigable.
+        if ($_.Exception.Message -like "*No events were found*") {
+            Write-Host "No se encontraron intentos de inicio de sesion fallidos en las ultimas 24 horas." -ForegroundColor Green
+        } else {
+            Write-Host "Error al acceder al registro de eventos de seguridad. Verifique que su cuenta tiene los privilegios de seguridad necesarios." -ForegroundColor Red
+            Write-Host "Detalles del error: $($_.Exception.Message)" -ForegroundColor Red
+        }
     }
 }
-
 function Activate-Windows {
     Write-Host "ADVERTENCIA DE SEGURIDAD: Va a ejecutar un script de activación NO OFICIAL." -ForegroundColor Yellow
     Write-Host "Este script se descarga de Internet y se ejecuta sin revisión." -ForegroundColor Yellow
@@ -1029,43 +1003,30 @@ function Generate-HTMLReport {
 <!DOCTYPE html>
 <html>
 <head>
-<style>
-    body { font-family: Arial, sans-serif; margin: 2em; background-color: #f4f4f9; color: #333; }
-    .container { max-width: 900px; margin: auto; background: #fff; padding: 2em; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    h1, h2 { color: #2a2a72; border-bottom: 2px solid #2a2a72; padding-bottom: 0.5em; }
-    table { width: 100%; border-collapse: collapse; margin-top: 1em; }
-    th, td { text-align: left; padding: 12px; border: 1px solid #ddd; }
-    th { background-color: #2a2a72; color: white; }
-    .status-ok { color: green; font-weight: bold; }
-    .status-warning { color: orange; font-weight: bold; }
-    .status-danger { color: red; font-weight: bold; }
-</style>
+    <title>Reporte de Seguridad del Sistema</title>
 </head>
 <body>
-    <div class="container">
-        <h1>Reporte de Seguridad del Sistema</h1>
-        <p><strong>Fecha de Análisis:</strong> $($reportData.FechaAnalisis)</p>
-        
-        <h2>Resumen del Sistema</h2>
-        <p><strong>Usuario:</strong> $($reportData.InformacionSistema.UsuarioActual)</p>
-        <p><strong>Equipo:</strong> $($reportData.InformacionSistema.NombreEquipo)</p>
-        <p><strong>Administradores:</strong> $($administrators)</p>
-        <p><strong>Estado RDP:</strong> $($reportData.EstadoRDP)</p>
-        <p><strong>Estado Telemetría:</strong> $($reportData.EstadoTelemetria)</p>
+    <h1>Reporte de Seguridad del Sistema</h1>
+    <p>Fecha de Analisis: $($reportData.FechaAnalisis)</p>
+    
+    <h2>Resumen del Sistema</h2>
+    <p>Usuario: $($reportData.InformacionSistema.UsuarioActual)</p>
+    <p>Equipo: $($reportData.InformacionSistema.NombreEquipo)</p>
+    <p>Administradores: $($administrators)</p>
+    <p>Estado RDP: $($reportData.EstadoRDP)</p>
+    <p>Estado Telemetria: $($reportData.EstadoTelemetria)</p>
 
-        <h2>Hallazgos de Seguridad</h2>
+    <h2>Hallazgos de Seguridad</h2>
 "@
     
     $html += "<h3>Puertos de Firewall Abiertos (Permitido)</h3>"
     if ($reportData.PuertosAbiertosFirewall.Count -gt 0) {
-        $html += "<table><thead><tr><th>Nombre</th><th>Dirección</th><th>Acción</th><th>Puerto</th></tr></thead><tbody>"
+        $html += "<table border='1'><thead><tr><th>Nombre</th><th>Direccion</th><th>Accion</th><th>Puerto</th></tr></thead><tbody>"
         $reportData.PuertosAbiertosFirewall | ForEach-Object {
-            # Recortar el nombre para que no supere los 20 caracteres
             $displayName = $_.DisplayName
             if ($displayName.Length -gt 20) {
                 $displayName = $displayName.Substring(0, 17) + "..."
             }
-            # Recortar el puerto para que no supere los 20 caracteres
             $localPort = $_.LocalPort
             if ($localPort.Length -gt 20) {
                 $localPort = $localPort.Substring(0, 17) + "..."
@@ -1079,42 +1040,42 @@ function Generate-HTMLReport {
 
     $html += "<h3>Tareas Programadas Sospechosas</h3>"
     if ($reportData.TareasProgramadasSospechosas.Count -gt 0) {
-        $html += "<table><thead><tr><th>Nombre</th><th>Estado</th><th>Ruta de la Tarea</th><th>Ruta de la Acción</th></tr></thead><tbody>"
+        $html += "<table border='1'><thead><tr><th>Nombre</th><th>Estado</th><th>Ruta de la Tarea</th><th>Ruta de la Accion</th></tr></thead><tbody>"
         $reportData.TareasProgramadasSospechosas | ForEach-Object {
-            $html += "<tr class='status-danger'><td>$($_.TaskName)</td><td>$($_.State)</td><td>$($_.TaskPath)</td><td>$($_.ActionPath)</td></tr>"
+            $html += "<tr><td>$($_.TaskName)</td><td>$($_.State)</td><td>$($_.TaskPath)</td><td>$($_.ActionPath)</td></tr>"
         }
         $html += "</tbody></table>"
     } else {
         $html += "<p>No se encontraron tareas programadas sospechosas.</p>"
     }
     
-    $html += "<h3>Procesos en Ejecución sin Firma Digital</h3>"
+    $html += "<h3>Procesos en Ejecucion sin Firma Digital</h3>"
     if ($reportData.ProcesosSinFirma.Count -gt 0) {
-        $html += "<table><thead><tr><th>Nombre</th><th>PID</th><th>Ruta</th><th>Hora de Inicio</th></tr></thead><tbody>"
+        $html += "<table border='1'><thead><tr><th>Nombre</th><th>PID</th><th>Ruta</th><th>Hora de Inicio</th></tr></thead><tbody>"
         $reportData.ProcesosSinFirma | ForEach-Object {
-            $html += "<tr class='status-danger'><td>$($_.ProcessName)</td><td>$($_.ID)</td><td>$($_.Path)</td><td>$($_.StartTime)</td></tr>"
+            $html += "<tr><td>$($_.ProcessName)</td><td>$($_.ID)</td><td>$($_.Path)</td><td>$($_.StartTime)</td></tr>"
         }
         $html += "</tbody></table>"
     } else {
-        $html += "<p>No se encontraron procesos en ejecución sin una firma digital válida.</p>"
+        $html += "<p>No se encontraron procesos en ejecucion sin una firma digital valida.</p>"
     }
 
-    $html += "<h3>Archivos Críticos sin Firma Digital</h3>"
+    $html += "<h3>Archivos Criticos sin Firma Digital</h3>"
     if ($reportData.ArchivosSinFirma.Count -gt 0) {
-        $html += "<table><thead><tr><th>Nombre</th><th>Directorio</th><th>Última Modificación</th></tr></thead><tbody>"
+        $html += "<table border='1'><thead><tr><th>Nombre</th><th>Directorio</th><th>Ultima Modificacion</th></tr></thead><tbody>"
         $reportData.ArchivosSinFirma | ForEach-Object {
-            $html += "<tr class='status-danger'><td>$($_.Name)</td><td>$($_.Directory)</td><td>$($_.LastWriteTime)</td></tr>"
+            $html += "<tr><td>$($_.Name)</td><td>$($_.Directory)</td><td>$($_.LastWriteTime)</td></tr>"
         }
         $html += "</tbody></table>"
     } else {
-        $html += "<p>No se encontraron archivos críticos sin una firma digital válida.</p>"
+        $html += "<p>No se encontraron archivos criticos sin una firma digital valida.</p>"
     }
     
-    $html += "<h3>Entradas de Registro de Inicio Automático Sospechosas</h3>"
+    $html += "<h3>Entradas de Registro de Inicio Automatico Sospechosas</h3>"
     if ($reportData.EntradasAutorunSospechosas.Count -gt 0) {
-        $html += "<table><thead><tr><th>Clave</th><th>Ruta</th><th>Ubicación</th></tr></thead><tbody>"
+        $html += "<table border='1'><thead><tr><th>Clave</th><th>Ruta</th><th>Ubicacion</th></tr></thead><tbody>"
         $reportData.EntradasAutorunSospechosas | ForEach-Object {
-            $html += "<tr class='status-danger'><td>$($_.Clave)</td><td>$($_.Ruta)</td><td>$($_.Ubicacion)</td></tr>"
+            $html += "<tr><td>$($_.Clave)</td><td>$($_.Ruta)</td><td>$($_.Ubicacion)</td></tr>"
         }
         $html += "</tbody></table>"
     } else {
@@ -1125,7 +1086,7 @@ function Generate-HTMLReport {
 
     $desktopPath = [Environment]::GetFolderPath("Desktop")
     if (-not (Test-Path $desktopPath)) {
-        Write-Host "No se encontró el escritorio del usuario. Guardando en el directorio temporal." -ForegroundColor Yellow
+        Write-Host "No se encontro el escritorio del usuario. Guardando en el directorio temporal." -ForegroundColor Yellow
         $desktopPath = [System.IO.Path]::GetTempPath()
     }
     
@@ -1133,10 +1094,9 @@ function Generate-HTMLReport {
     
     $html | Out-File -FilePath $reportPath -Encoding utf8
     
-    Write-Host "Reporte generado con éxito en: $reportPath" -ForegroundColor Green
+    Write-Host "Reporte generado con exito en: $reportPath" -ForegroundColor Green
     Invoke-Item $reportPath
 }
-
 function Get-UserInfo {
     # Información del usuario y sistema
     Write-Host "Informacion del Usuario y Sistema:" -ForegroundColor Yellow
