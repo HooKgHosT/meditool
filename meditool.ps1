@@ -134,34 +134,162 @@ function Verify-FileSignatures {
 }
 
 function Generate-HTMLReport {
-    if ($null -eq $global:InitialSystemState) { Capture-InitialState }
+    if ($null -eq $global:InitialSystemState) {
+        Write-Host "El estado inicial no ha sido capturado. Realizando análisis ahora..." -ForegroundColor Yellow
+        Capture-InitialState
+    }
+    
     Add-LogEntry -Message "Generando reporte de seguridad en HTML."
     Write-Host "Generando reporte de seguridad..." -ForegroundColor Yellow
     $reportData = $global:InitialSystemState
-    $head = "<style>body{font-family:'Segoe UI',sans-serif;margin:2em;background-color:#f4f4f9;color:#333}h1,h2{color:#2a2a72;border-bottom:2px solid #2a2a72;padding-bottom:.5em}table{width:100%;border-collapse:collapse;margin-top:1em}th,td{text-align:left;padding:8px;border:1px solid #ddd;word-break:break-all}th{background-color:#4a4a8c;color:white}.status-danger{color:#d9534f;font-weight:700}</style>"
-    $body = "<h1>Reporte de Seguridad - MediTool</h1><p><strong>Fecha:</strong> $(Get-Date)</p>"
-    $body += "<h2>Configuración Inicial</h2><p><strong>Usuario:</strong> $($reportData.InformacionSistema.UsuarioActual)</p><p><strong>Equipo:</strong> $($reportData.InformacionSistema.NombreEquipo)</p>"
-    # (Aquí se añadirían más secciones del reporte como Tareas, Procesos, etc.)
+    
+    # --- Estilo CSS para el Reporte ---
+    $htmlHead = @"
+<head>
+<meta charset="UTF-8">
+<title>Reporte de Seguridad - MediTool</title>
+<style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 2em; background-color: #f4f4f9; color: #333; font-size: 12pt; }
+    .container { max-width: 1200px; margin: auto; background: #fff; padding: 2em; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    h1, h2, h3 { color: #2a2a72; border-bottom: 2px solid #2a2a72; padding-bottom: 0.5em; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1em; }
+    th, td { text-align: left; padding: 10px; border: 1px solid #ddd; word-break: break-word; }
+    th { background-color: #4a4a8c; color: white; }
+    .status-ok { color: #5cb85c; font-weight: bold; }
+    .status-danger { color: #d9534f; font-weight: bold; }
+    .status-warn { color: #f0ad4e; font-weight: bold; }
+    p { line-height: 1.6; }
+</style>
+</head>
+"@
 
-    $body += "<h2>Resultados de Análisis con VirusTotal</h2>"
-    if ($global:VirusTotalScans.Count -gt 0) {
-        $body += "<table><thead><tr><th>Archivo</th><th>Hash (SHA256)</th><th>Detecciones</th><th>Total Motores</th><th>Estado</th></tr></thead><tbody>"
-        $global:VirusTotalScans | ForEach-Object {
-            $rowClass = if ($_.Status -eq "Malicioso") { "class='status-danger'" } else { "" }
-            $body += "<tr $rowClass><td>$($_.File)</td><td>$($_.Hash)</td><td>$($_.Detections)</td><td>$($_.Total)</td><td>$($_.Status)</td></tr>"
+    # --- Construcción del Cuerpo del Reporte ---
+    $htmlBody = "<body><div class='container'>"
+    $htmlBody += "<h1>Reporte de Seguridad del Sistema - MediTool</h1>"
+    $htmlBody += "<p><strong>Fecha de Generación del Reporte:</strong> $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')</p>"
+    $htmlBody += "<p><strong>Usuario:</strong> $($reportData.InformacionSistema.UsuarioActual)</p>"
+    $htmlBody += "<p><strong>Equipo:</strong> $($reportData.InformacionSistema.NombreEquipo)</p>"
+
+    # Función auxiliar para crear tablas
+    function ConvertTo-HtmlTable {
+        param($Title, $Data)
+        $html = "<h2>$Title</h2>"
+        if ($Data) {
+            $html += $Data | ConvertTo-Html -Fragment
+        } else {
+            $html += "<p>No se encontraron elementos para esta categoría.</p>"
         }
-        $body += "</tbody></table>"
-    } else {
-        $body += "<p>No se realizaron análisis con VirusTotal durante esta sesión.</p>"
+        return $html
     }
 
+    # --- Secciones del Reporte ---
+    $htmlBody += ConvertTo-HtmlTable "Reglas de Firewall Inseguras (Estado Inicial)" $reportData.ReglasFirewallInseguras
+    $htmlBody += ConvertTo-HtmlTable "Tareas Programadas Sospechosas" $reportData.TareasProgramadasSospechosas
+    $htmlBody += ConvertTo-HtmlTable "Procesos en Ejecución sin Firma" $reportData.ProcesosSinFirma
+    $htmlBody += ConvertTo-HtmlTable "Entradas de Inicio Automático (Autorun) Sospechosas" $reportData.EntradasAutorunSospechosas
+    
+    # --- Sección de Hardening ---
+    $htmlBody += "<h2>Resultados de Chequeos de Hardening</h2>"
+    $htmlBody += "<h3>Anti-PEAS (Enumeración)</h3>"
+    $htmlBody += $reportData.ResultadosAntiPEAS | ConvertTo-Html -Fragment
+    $htmlBody += "<h3>Anti-Robo-Credenciales</h3>"
+    $htmlBody += $reportData.ResultadosAntiCredenciales | ConvertTo-Html -Fragment
+    $htmlBody += "<h3>Políticas de Seguridad Locales</h3>"
+    $htmlBody += $reportData.ResultadosPoliticasLocales | ConvertTo-Html -Fragment
+
+    # --- Sección de Eventos Críticos ---
+    $htmlBody += "<h2>Auditoría de Eventos Críticos</h2>"
+    $htmlBody += $reportData.ResultadosEventosCriticos | ConvertTo-Html -Fragment
+
+    # --- Sección de VirusTotal ---
+    $htmlBody += "<h2>Resultados de Análisis con VirusTotal</h2>"
+    if ($global:VirusTotalScans.Count -gt 0) {
+        $htmlBody += $global:VirusTotalScans | ConvertTo-Html -Fragment
+    } else {
+        $htmlBody += "<p>No se realizaron análisis con VirusTotal durante esta sesión.</p>"
+    }
+
+    # --- Log de Acciones del Usuario ---
+    $htmlBody += "<h2>Registro de Acciones Realizadas Durante la Sesión</h2>"
+    if ($global:ActionLog.Count -gt 0) {
+        $htmlBody += $global:ActionLog | ConvertTo-Html -Fragment
+    } else {
+        $htmlBody += "<p>No se realizaron acciones manuales durante esta sesión.</p>"
+    }
+
+    $htmlBody += "</div></body>"
+
+    # --- Guardar y Abrir el Archivo HTML ---
     $reportPath = Join-Path -Path ([Environment]::GetFolderPath("Desktop")) -ChildPath "Security_Report_$(Get-Date -Format 'yyyyMMdd_HHmmss').html"
     try {
-        ConvertTo-Html -Head $head -Body $body | Out-File -FilePath $reportPath -Encoding utf8 -ErrorAction Stop
+        ConvertTo-Html -Head $htmlHead -Body $htmlBody | Out-File -FilePath $reportPath -Encoding utf8 -ErrorAction Stop
         Write-Host "Reporte generado con éxito en: $reportPath" -ForegroundColor Green
         Invoke-Item $reportPath
     } catch {
-        Write-Host "Error al guardar el reporte: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Error al guardar el reporte en el escritorio: $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
+
+function Get-VirusTotalReport {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$FilePath
+    )
+
+    if (-not (Test-Path $FilePath)) {
+        Write-Host "Error: El archivo '$FilePath' no fue encontrado." -ForegroundColor Red
+        Add-LogEntry -Message "Error: Intento de análisis de VirusTotal en un archivo no existente: $FilePath"
+        return
+    }
+
+    if ([string]::IsNullOrEmpty($global:VirusTotalApiKey)) {
+        Write-Host "Para usar esta función, necesitas una clave API de VirusTotal." -ForegroundColor Yellow
+        Write-Host "Puedes obtener una gratis registrándote en www.virustotal.com" -ForegroundColor Yellow
+        $global:VirusTotalApiKey = Read-Host "Por favor, ingresa tu clave API de VirusTotal"
+    }
+
+    try {
+        Write-Host "Calculando hash del archivo..." -ForegroundColor Cyan
+        $fileHash = (Get-FileHash -Path $FilePath -Algorithm SHA256).Hash
+        Write-Host "Hash (SHA256): $fileHash" -ForegroundColor Cyan
+        Add-LogEntry -Message "Calculado hash SHA256 para '$FilePath': $fileHash"
+
+        $headers = @{ "x-apikey" = $global:VirusTotalApiKey }
+        $uri = "https://www.virustotal.com/api/v3/files/$fileHash"
+
+        Write-Host "Consultando la API de VirusTotal..." -ForegroundColor Cyan
+        $response = Invoke-RestMethod -Uri $uri -Headers $headers -Method Get
+
+        $stats = $response.data.attributes.last_analysis_stats
+        $detections = $stats.malicious
+        $totalEngines = $stats.harmless + $stats.malicious + $stats.suspicious + $stats.undetected + $stats.timeout
+
+        $scanResult = [PSCustomObject]@{
+            File = $FilePath
+            Hash = $fileHash
+            Detections = $detections
+            Total = $totalEngines
+            Status = "OK"
+        }
+
+        if ($detections -gt 0) {
+            Write-Host "¡ALERTA! VirusTotal detectó este archivo como malicioso." -ForegroundColor Red
+            Write-Host "Resultado: $detections / $totalEngines motores de antivirus lo marcaron como malicioso." -ForegroundColor Red
+            $scanResult.Status = "Malicioso"
+            Add-LogEntry -Message "ALERTA VirusTotal: '$FilePath' detectado como malicioso ($detections/$totalEngines)."
+        } else {
+            Write-Host "El archivo parece seguro según VirusTotal." -ForegroundColor Green
+            Write-Host "Resultado: $detections / $totalEngines motores de antivirus lo marcaron como malicioso." -ForegroundColor Green
+            $scanResult.Status = "Limpio"
+            Add-LogEntry -Message "Análisis VirusTotal OK para '$FilePath' ($detections/$totalEngines)."
+        }
+        $global:VirusTotalScans.Add($scanResult) # Se agrega al log para el reporte HTML
+
+    } catch {
+        Write-Host "Ocurrió un error al contactar con VirusTotal." -ForegroundColor Red
+        Write-Host "Detalles: $($_.Exception.Message)" -ForegroundColor Red
+        Add-LogEntry -Message "Error en la consulta a VirusTotal para '$FilePath': $($_.Exception.Message)"
+        $global:VirusTotalScans.Add([PSCustomObject]@{ File = $FilePath; Hash = "N/A"; Detections = "N/A"; Total = "N/A"; Status = "Error" })
     }
 }
 
@@ -683,27 +811,64 @@ function Find-RegistryAutorun {
 }
 
 function Analyze-NetworkConnections {
-    Write-Host "`nAnalizando conexiones de red en busca de actividad sospechosa..." -ForegroundColor Yellow
+    Write-Host "`nAnalizando la configuracion de red..." -ForegroundColor Yellow
     
     try {
-        $suspiciousPorts = @(31337, 21, 22, 23, 8080, 4444, 5900, 5901)
-        $suspiciousConnections = Get-NetTCPConnection | Where-Object { $_.RemotePort -in $suspiciousPorts -or $_.State -eq "CloseWait" }
+        $adapters = Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' }
+        if ($adapters.Count -gt 0) {
+            foreach ($adapter in $adapters) {
+                Write-Host "`n--- Adaptador: $($adapter.Name) ---" -ForegroundColor Cyan
+                $ipAddress = Get-NetIPAddress -InterfaceIndex $adapter.InterfaceIndex -ErrorAction SilentlyContinue | Where-Object { $_.AddressFamily -eq 'IPv4' }
+                $gateway = Get-NetRoute -InterfaceIndex $adapter.InterfaceIndex -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue
+                $dns = Get-DnsClientServerAddress -InterfaceIndex $adapter.InterfaceIndex -ErrorAction SilentlyContinue
+                
+                if ($ipAddress) {
+                    Write-Host "  - Direccion IP: $($ipAddress.IPAddress)" -ForegroundColor White
+                } else { Write-Host "  - Direccion IP: No disponible" -ForegroundColor Red }
+                
+                if ($gateway) {
+                    Write-Host "  - Puerta de Enlace: $($gateway.NextHop)" -ForegroundColor White
+                } else { Write-Host "  - Puerta de Enlace: No disponible" -ForegroundColor Red }
+
+                if ($dns) {
+                    $dnsServers = $dns.ServerAddresses -join ", "
+                    Write-Host "  - Servidores DNS: $($dnsServers)" -ForegroundColor White
+                } else { Write-Host "  - Servidores DNS: No disponible" -ForegroundColor Red }
+            }
+        } else {
+            Write-Host "No se encontraron adaptadores de red activos." -ForegroundColor Red
+        }
+    } catch {
+        Write-Host "Error al obtener informacion de la red: $($_.Exception.Message)" -ForegroundColor Red
+    }
+
+    Write-Host "`n`nAnalizando conexiones de red en busca de actividad sospechosa..." -ForegroundColor Yellow
+    
+    $suspiciousPorts = @(31337, 21, 22, 23, 8080, 4444, 5900, 5901)
+    
+    try {
+        $allConnections = Get-NetTCPConnection
+        $unsignedProcesses = Find-UnsignedProcesses
+        
+        $suspiciousConnections = $allConnections | Where-Object { 
+            ($_.RemotePort -in $suspiciousPorts) -or
+            ($_.State -eq "CloseWait") -or
+            ($unsignedProcesses | Where-Object { $_.Id -eq $_.OwningProcess }).Count -gt 0
+        }
 
         if ($suspiciousConnections.Count -gt 0) {
             Write-Host "Se encontraron las siguientes conexiones sospechosas:" -ForegroundColor Red
             $suspiciousConnections | Select-Object OwningProcess, LocalAddress, LocalPort, RemoteAddress, RemotePort, State | Format-Table -AutoSize
             
-            $pidToClose = Read-Host "`nPara cerrar una conexión, ingrese el PID (OwningProcess) o '0' para cancelar"
+            $pidToClose = Read-Host "`nPara cerrar una conexion, ingresa el PID (OwningProcess) o '0' para cancelar"
             if ($pidToClose -ne "0" -and $pidToClose) {
                 try {
                     Stop-Process -Id $pidToClose -Force -ErrorAction Stop
                     Write-Host "Proceso con PID $pidToClose y sus conexiones cerradas." -ForegroundColor Green
-                } catch {
-                    Write-Host "No se pudo cerrar el proceso con PID $pidToClose." -ForegroundColor Red
-                }
+                } catch { Write-Host "No se pudo cerrar el proceso con PID $pidToClose." -ForegroundColor Red }
             }
         } else {
-            Write-Host "No se encontró actividad de red sospechosa." -ForegroundColor Green
+            Write-Host "No se encontro actividad de red sospechosa." -ForegroundColor Green
         }
     } catch {
         Write-Host "Error al analizar las conexiones de red." -ForegroundColor Red
@@ -866,15 +1031,18 @@ function GetData-UnsignedFiles {
 function Capture-InitialState {
     Write-Host "Capturando estado inicial del sistema para el reporte..." -ForegroundColor Cyan
     $global:InitialSystemState = [PSCustomObject]@{
-        FechaAnalisis                = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        InformacionSistema           = Get-UserInfo
-        EstadoRDP                    = Get-RDPStatus
-        EstadoTelemetria             = Get-TelemetryStatus
-        TareasProgramadasSospechosas = Find-MaliciousScheduledTasks 
-        ProcesosSinFirma             = Find-UnsignedProcesses     
-        ArchivosSinFirmaCriticos     = GetData-UnsignedFiles      
-        EntradasAutorunSospechosas   = GetData-RegistryAutorun    
-        ReglasFirewallInseguras      = GetData-FirewallRules      
+        FechaAnalisis                 = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        InformacionSistema            = Get-UserInfo
+        EstadoRDP                     = Get-RDPStatus # Simplificado para el reporte
+        ReglasFirewallInseguras       = Get-NetFirewallRule | Where-Object { $_.Enabled -eq "True" -and $_.Direction -eq "Inbound" -and $_.Action -eq "Allow" -and ($_.LocalPort -in @("3389", "5985", "5986")) } | Select-Object DisplayName, Protocol, LocalPort, Program
+        TareasProgramadasSospechosas  = Find-MaliciousScheduledTasks 
+        ProcesosSinFirma              = Find-UnsignedProcesses | Select-Object ProcessName, ID, Path, StartTime
+        ArchivosSinFirmaCriticos      = (Get-ChildItem -Path @("$env:SystemRoot\System32", "$env:ProgramFiles", "$env:ProgramFiles(x86)") -Recurse -File -Include "*.exe", "*.dll" -ErrorAction SilentlyContinue | Where-Object { (Get-SafeAuthenticodeSignature -Path $_.FullName).Status -ne "Valid" }) | Select-Object Name, DirectoryName, LastWriteTime
+        EntradasAutorunSospechosas    = Find-RegistryAutorun -Silent
+        ResultadosAntiPEAS            = Invoke-PeasHardeningChecks -ForReport
+        ResultadosAntiCredenciales    = Invoke-CredentialHardeningChecks -ForReport
+        ResultadosEventosCriticos     = Invoke-CriticalEventsAudit -ForReport
+        ResultadosPoliticasLocales    = Invoke-LocalPolicyChecks -ForReport
     }
     Add-LogEntry -Message "Se ha capturado el estado de configuración inicial del sistema."
 }
