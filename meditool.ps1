@@ -810,6 +810,36 @@ function Find-RegistryAutorun {
     }
 }
 
+function Manage-RegistryAutorun {
+    Write-Host "Buscando entradas de inicio automático sospechosas..." -ForegroundColor Yellow
+    $suspiciousEntries = GetData-RegistryAutorun 
+    
+    if ($suspiciousEntries.Count -gt 0) {
+        Write-Host "Se encontraron las siguientes entradas de Autorun sospechosas:" -ForegroundColor Red
+        $suspiciousEntries | Format-Table -AutoSize
+        
+        Write-Host "`n¿Desea eliminar una entrada de la lista? (S/N)" -ForegroundColor Cyan
+        $choice = Read-Host
+        if ($choice -eq 's') {
+            $keyToRemove = Read-Host "Ingrese el nombre de la 'Clave' que desea eliminar"
+            $entryToRemove = $suspiciousEntries | Where-Object { $_.Clave -eq $keyToRemove } | Select-Object -First 1
+            
+            if ($entryToRemove) {
+                try {
+                    Remove-ItemProperty -Path $entryToRemove.Ubicacion -Name $entryToRemove.Clave -Force -ErrorAction Stop
+                    Write-Host "Clave del registro eliminada exitosamente." -ForegroundColor Green
+                } catch {
+                    Write-Host "Error al eliminar la clave." -ForegroundColor Red
+                }
+            } else {
+                Write-Host "No se encontró la clave especificada." -ForegroundColor Red
+            }
+        }
+    } else {
+        Write-Host "No se encontraron entradas de inicio automático sospechosas." -ForegroundColor Green
+    }
+}
+
 function Analyze-NetworkConnections {
     Write-Host "`nAnalizando la configuracion de red..." -ForegroundColor Yellow
     
@@ -990,7 +1020,6 @@ function GetData-RegistryAutorun {
     $autorunPaths = @("HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run", "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run")
     $suspiciousEntries = @()
     $excludedPrograms = @("discord", "spotify", "riot", "steam", "epic", "zoom", "microsoft", "google", "brave", "opera", "teams")
-
     foreach ($path in $autorunPaths) {
         try {
             Get-ItemProperty -Path $path -ErrorAction SilentlyContinue | Get-Member -MemberType NoteProperty | ForEach-Object {
@@ -1002,7 +1031,7 @@ function GetData-RegistryAutorun {
                         if ($propValue -like "*$excluded*") { $isExcluded = $true; break }
                     }
                     if (-not $isExcluded) {
-                        $suspiciousEntries += [PSCustomObject]@{ "Clave" = $propName; "Ruta" = $propValue; "Ubicación" = $path }
+                        $suspiciousEntries += [PSCustomObject]@{ "Clave" = $propName; "Ruta" = $propValue; "Ubicacion" = $path }
                     }
                 }
             }
@@ -1038,7 +1067,7 @@ function Capture-InitialState {
         TareasProgramadasSospechosas  = Find-MaliciousScheduledTasks 
         ProcesosSinFirma              = Find-UnsignedProcesses | Select-Object ProcessName, ID, Path, StartTime
         ArchivosSinFirmaCriticos      = (Get-ChildItem -Path @("$env:SystemRoot\System32", "$env:ProgramFiles", "$env:ProgramFiles(x86)") -Recurse -File -Include "*.exe", "*.dll" -ErrorAction SilentlyContinue | Where-Object { (Get-SafeAuthenticodeSignature -Path $_.FullName).Status -ne "Valid" }) | Select-Object Name, DirectoryName, LastWriteTime
-        EntradasAutorunSospechosas    = Find-RegistryAutorun -Silent
+        EntradasAutorunSospechosas    = GetData-RegistryAutorun -Silent
         ResultadosAntiPEAS            = Invoke-PeasHardeningChecks -ForReport
         ResultadosAntiCredenciales    = Invoke-CredentialHardeningChecks -ForReport
         ResultadosEventosCriticos     = Invoke-CriticalEventsAudit -ForReport
@@ -1288,15 +1317,16 @@ function Show-MainMenu {
 # --- INICIO DEL SCRIPT Y BUCLE PRINCIPAL ---
 
 # Capturar el estado inicial del sistema una sola vez al iniciar.
-Capture-InitialState
+if (Test-AdminPrivileges) {
+    Write-Host "El script se está ejecutando con permisos de Administrador." -ForegroundColor Green
+    # 1. Capturar estado inicial de forma no interactiva
+    Capture-InitialState
 
-while ($true) {
-    $selection = Show-MainMenu
-    
-    $optionObject = $script:menuOptions | Where-Object { $_.ID -eq $selection }
-    if ($optionObject) { Add-LogEntry -Message "Usuario seleccionó la opción '$($selection)': $($optionObject.Opcion)" }
-
-    switch ($selection) {
+    # 2. Iniciar el bucle del menú interactivo
+    while ($true) {
+        $selection = Show-MainMenu
+        
+        switch ($selection) {
         "1" { Get-RDPStatus }
         "2" { Get-FirewallStatus }
         "3" { Fix-FirewallPorts }
@@ -1309,7 +1339,7 @@ while ($true) {
         "10" { Find-UnsignedProcesses | Format-Table -AutoSize }
         "11" { Stop-SuspiciousProcess }
         "12" { Block-FileExecution }
-        "13" { Find-RegistryAutorun }
+        "13" { Manage-RegistryAutorun }
         "14" { Analyze-NetworkConnections }
         "16" { Find-HiddenFilesAndScan }
         "17" { Audit-FailedLogons }
@@ -1344,7 +1374,7 @@ while ($true) {
 
     # Pausa para que el usuario pueda ver el resultado antes de volver al menú
     if ($selection -ne "0") {
-        Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
-        Read-Host | Out-Null
-    }
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
+        }
 }
