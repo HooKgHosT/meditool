@@ -1399,19 +1399,19 @@ function Show-MainMenu {
         "88" { Activate-Windows }
         "99" { Write-Host "Copyright (c) 2023 h00kGh0st" -ForegroundColor Cyan }
         "0" {
-            Clean-ScriptFromTemp
-            Write-Host "Saliendo del programa. ¡Adiós!" -ForegroundColor Green
-            Start-Sleep -Seconds 1
-            exit
+                Clean-ScriptFromTemp
+                Write-Host "Saliendo del programa. ¡Adiós!" -ForegroundColor Green
+                Start-Sleep -Seconds 1
+                exit
+            }
+            default { 
+                Write-Host "Opción no válida. Por favor, intente de nuevo." -ForegroundColor Red 
+            }
         }
-        default {
-            Write-Host "Opción no válida. Por favor, intente de nuevo." -ForegroundColor Red
-        }
-    }
 
-    # Pausa para que el usuario pueda ver el resultado antes de volver al menú
-    if ($selection -ne "0") {
+        if ($selection -ne "0") {
             Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
             Read-Host | Out-Null
         }
+    }
 }
