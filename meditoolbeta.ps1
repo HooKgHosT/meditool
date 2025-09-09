@@ -4,7 +4,7 @@
 
 # --- Lógica de autodescarga, elevación de permisos y limpieza ---
 $scriptName = "meditool.ps1"
-$scriptUrl = "https://raw.githubusercontent.com/HooKgHosT/meditool/main/meditool.ps1"
+$scriptUrl = "https://raw.githubusercontent.com/HooKgHosT/meditool/main/meditoolbeta.ps1"
 $tempPath = Join-Path $env:TEMP $scriptName
 
 function Test-AdminPrivileges {
@@ -1151,4 +1151,5 @@ function Show-MainMenu {
             Read-Host | Out-Null
         }
     }
+
 }
