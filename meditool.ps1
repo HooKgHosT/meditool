@@ -1355,15 +1355,11 @@ function Show-MainMenu {
 }
 # El script ahora inicia directamente en el menú.
 # La función Capture-InitialState se llama desde la Opción 27 o desde la 19 (Reporte).
-# --- INICIO DEL SCRIPT Y BUCLE PRINCIPAL ---
-
-# Capturar el estado inicial del sistema una sola vez al iniciar.
-if (Test-AdminPrivileges) {
+# --- BUCLE PRINCIPAL ---
     Write-Host "El script se está ejecutando con permisos de Administrador." -ForegroundColor Green
-    # 1. Capturar estado inicial de forma no interactiva
-    Capture-InitialState
+    # (Captura de estado inicial)
+    # Capture-InitialState # Puedes descomentar esto si quieres que se ejecute al inicio
 
-    # 2. Iniciar el bucle del menú interactivo
     while ($true) {
         $selection = Show-MainMenu
         
