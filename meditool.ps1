@@ -322,22 +322,64 @@ function Invoke-PeasHardeningChecks {
 
 function Invoke-CredentialHardeningChecks {
     Write-Host "`n--- Realizando Chequeos de Hardening contra Robo de Credenciales (Mimikatz) ---" -ForegroundColor Cyan
+    
+    # 1. Verificar si la Protección LSA (Local Security Authority) está activada
     Write-Host "`n[1] Verificando la Protección LSA (RunAsPPL)..." -ForegroundColor Yellow
     $lsaKey = "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa"
     $lsaProtection = Get-ItemPropertyValue -Path $lsaKey -Name "RunAsPPL" -ErrorAction SilentlyContinue
-    if ($lsaProtection -eq 1) { Write-Host "[OK] La Protección LSA está HABILITADA." -ForegroundColor Green } 
-    else { Write-Host "[VULNERABLE] La Protección LSA está DESHABILITADA." -ForegroundColor Red; $fix = Read-Host "¿Desea HABILITAR la Protección LSA ahora (requiere reiniciar)? (S/N)"; if ($fix -eq 's') { Set-ItemProperty -Path $lsaKey -Name "RunAsPPL" -Value 1 -Type DWord; Write-Host "[CORREGIDO] Protección LSA habilitada. REINICIE el equipo para que el cambio surta efecto." -ForegroundColor Green; Add-LogEntry -Message "Protección LSA (RunAsPPL) habilitada." } }
+    if ($lsaProtection -eq 1) { 
+        Write-Host "[OK] La Protección LSA está HABILITADA." -ForegroundColor Green 
+    } else { 
+        Write-Host "[VULNERABLE] La Protección LSA está DESHABILITADA." -ForegroundColor Red
+        $fix = Read-Host "¿Desea HABILITAR la Protección LSA ahora (requiere reiniciar)? (S/N)"
+        if ($fix -eq 's') { 
+            Set-ItemProperty -Path $lsaKey -Name "RunAsPPL" -Value 1 -Type DWord
+            Write-Host "[CORREGIDO] Protección LSA habilitada. REINICIE el equipo para que el cambio surta efecto." -ForegroundColor Green
+            Add-LogEntry -Message "Protección LSA (RunAsPP) habilitada." 
+        } 
+    }
+    
+    # 2. Verificar si WDigest está deshabilitado (LÓGICA CORREGIDA)
     Write-Host "`n[2] Verificando el proveedor de seguridad WDigest..." -ForegroundColor Yellow
     $wdigestKey = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest"
     $useLogonCred = Get-ItemPropertyValue -Path $wdigestKey -Name "UseLogonCredential" -ErrorAction SilentlyContinue
-    if ($useLogonCred -eq 0) { Write-Host "[OK] WDigest está correctamente configurado." -ForegroundColor Green } 
-    else { Write-Host "[VULNERABLE] WDigest podría estar almacenando credenciales en texto claro." -ForegroundColor Red; $fix = Read-Host "¿Desea forzar la DESHABILITACIÓN de WDigest ahora? (S/N)"; if ($fix -eq 's') { if (-not (Test-Path $wdigestKey)) { New-Item -Path $wdigestKey -Force | Out-Null }; Set-ItemProperty -Path $wdigestKey -Name "UseLogonCredential" -Value 0 -Type DWord; Write-Host "[CORREGIDO] WDigest ha sido deshabilitado." -ForegroundColor Green; Add-LogEntry -Message "WDigest deshabilitado." } }
+
+    if ($useLogonCred -eq 1) {
+        # Este es el único caso VULNERABLE
+        Write-Host "[VULNERABLE] WDigest está configurado para almacenar credenciales en texto claro en memoria." -ForegroundColor Red
+        $fix = Read-Host "¿Desea forzar la DESHABILITACIÓN de WDigest ahora? (S/N)"
+        if ($fix -eq 's') {
+            if (-not (Test-Path $wdigestKey)) { New-Item -Path $wdigestKey -Force | Out-Null }
+            Set-ItemProperty -Path $wdigestKey -Name "UseLogonCredential" -Value 0 -Type DWord
+            Write-Host "[CORREGIDO] El almacenamiento de credenciales de WDigest ha sido deshabilitado." -ForegroundColor Green
+            Add-LogEntry -Message "Almacenamiento de credenciales de WDigest deshabilitado."
+        }
+    } else {
+        # Si la clave no existe ($useLogonCred es $null) o es 0, es SEGURO
+        Write-Host "[OK] WDigest está correctamente configurado para no almacenar credenciales en memoria." -ForegroundColor Green
+    }
+
+    # 3. Comprobar si Credential Guard está activo
     Write-Host "`n[3] Verificando el estado de Credential Guard..." -ForegroundColor Yellow
-    try { $cgStatus = (Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\Microsoft\Windows\DeviceGuard).SecurityServicesRunning; if ($cgStatus -contains "Credential Guard") { Write-Host "[OK] Credential Guard está activo." -ForegroundColor Green } else { Write-Host "[INFO] Credential Guard no está activo." -ForegroundColor Cyan } } catch { Write-Host "[INFO] No se pudo determinar el estado de Credential Guard." -ForegroundColor Cyan }
+    try { 
+        $cgStatus = (Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\Microsoft\Windows\DeviceGuard).SecurityServicesRunning
+        if ($cgStatus -contains "Credential Guard") { Write-Host "[OK] Credential Guard está activo." -ForegroundColor Green } 
+        else { Write-Host "[INFO] Credential Guard no está activo." -ForegroundColor Cyan } 
+    } catch { 
+        Write-Host "[INFO] No se pudo determinar el estado de Credential Guard." -ForegroundColor Cyan 
+    }
+    
+    # 4. Revisar la política de caché de credenciales de dominio
     Write-Host "`n[4] Verificando la política de caché de credenciales de dominio..." -ForegroundColor Yellow
     $cacheKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
     $cachedLogons = Get-ItemPropertyValue -Path $cacheKey -Name "CachedLogonsCount" -ErrorAction SilentlyContinue
-    if (!($cachedLogons)) { $cachedLogons = "No definido (defecto 10)"}; if ($cachedLogons -gt 4 -or $cachedLogons -like "*defecto*") { Write-Host "[ADVERTENCIA] El sistema almacena en caché '$($cachedLogons)' inicios de sesión." -ForegroundColor Yellow } else { Write-Host "[OK] La política de caché de credenciales está en un nivel aceptable (Valor: $cachedLogons)." -ForegroundColor Green }
+    if (!($cachedLogons)) { $cachedLogons = "No definido (defecto 10)"}
+    if ($cachedLogons -gt 4 -or $cachedLogons -like "*defecto*") { 
+        Write-Host "[ADVERTENCIA] El sistema almacena en caché '$($cachedLogons)' inicios de sesión." -ForegroundColor Yellow 
+    } else { 
+        Write-Host "[OK] La política de caché de credenciales está en un nivel aceptable (Valor: $cachedLogons)." -ForegroundColor Green 
+    }
+    
     Write-Host "`n--- Chequeo de Credenciales finalizado ---" -ForegroundColor Cyan
 }
 
