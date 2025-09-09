@@ -1,6 +1,6 @@
 # Este script está diseñado como una herramienta de seguridad (Blue Team)
 # para la verificación y corrección de vulnerabilidades comunes en sistemas Windows 10 y 11.
-# Script version 1.1.0
+# Script version 1.4.1 (Corregido por Programeta)
 
 # --- Lógica de autodescarga, elevación de permisos y limpieza ---
 $scriptName = "meditool.ps1"
@@ -27,71 +27,72 @@ if (($MyInvocation.MyCommand.Path -ne $tempPath) -and (-not (Test-AdminPrivilege
     }
 }
 
+# --- INICIO DEL BLOQUE QUE REQUIERE PERMISOS DE ADMINISTRADOR ---
 if (Test-AdminPrivileges) {
+
     Write-Host "El script se está ejecutando con permisos de Administrador." -ForegroundColor Green
-}
 
-# Variables globales
-$global:ActionLog = [System.Collections.Generic.List[PSCustomObject]]::new()
-$global:InitialSystemState = $null
+    # Variables globales
+    $global:ActionLog = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $global:InitialSystemState = $null
 
-function Add-LogEntry {
-    param(
-        [string]$Message
-    )
-    $logEntry = [PSCustomObject]@{
-        Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        Action    = $Message
-    }
-    $global:ActionLog.Add($logEntry)
-}
-
-$OutputEncoding = [System.Text.UTF8Encoding]::new()
-
-# --- Funciones de seguridad ---
-
-function Get-SafeAuthenticodeSignature {
-    param(
-        [string]$Path
-    )
-    try {
-        if (Test-Path -Path $Path -PathType Leaf) {
-            $signature = Get-AuthenticodeSignature -LiteralPath $Path -ErrorAction Stop
-            return $signature
+    function Add-LogEntry {
+        param(
+            [string]$Message
+        )
+        $logEntry = [PSCustomObject]@{
+            Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+            Action    = $Message
         }
-    } catch {
-        return [PSCustomObject]@{ Status = "Unknown" }
+        $global:ActionLog.Add($logEntry)
     }
-}
 
-function Get-RDPStatus {
-    $service = Get-Service -Name TermService -ErrorAction SilentlyContinue
-    if ($service) {
-        if ($service.Status -eq "Running") {
-            return "El servicio de RDP se está ejecutando."
-        } else {
-            return "El servicio de RDP está detenido."
-        }
-    } else {
-        return "El servicio de RDP no está instalado."
-    }
-}
+    $OutputEncoding = [System.Text.UTF8Encoding]::new()
 
-function Get-LastIncomingRDPLogon {
-    try {
-        $event = Get-WinEvent -FilterHashtable @{Logname='Security'; Id=4624; Data='3389'} -MaxEvents 1 -ErrorAction Stop
-        if ($event) {
-            $props = @{
-                "Fecha"   = $event.TimeCreated
-                "Usuario" = $event.Properties[5].Value
-                "Origen"  = $event.Properties[18].Value
+    # --- Funciones de seguridad ---
+
+    function Get-SafeAuthenticodeSignature {
+        param(
+            [string]$Path
+        )
+        try {
+            if (Test-Path -Path $Path -PathType Leaf) {
+                $signature = Get-AuthenticodeSignature -LiteralPath $Path -ErrorAction Stop
+                return $signature
             }
-            return [PSCustomObject]$props
+        } catch {
+            return [PSCustomObject]@{ Status = "Unknown" }
         }
-    } catch {
-        return $null
     }
-}
+
+    function Get-RDPStatus {
+        $service = Get-Service -Name TermService -ErrorAction SilentlyContinue
+        if ($service) {
+            if ($service.Status -eq "Running") {
+                return "El servicio de RDP se está ejecutando."
+            } else {
+                return "El servicio de RDP está detenido."
+            }
+        } else {
+            return "El servicio de RDP no está instalado."
+        }
+    }
+
+    function Get-LastIncomingRDPLogon {
+        try {
+            $event = Get-WinEvent -FilterHashtable @{Logname='Security'; Id=4624; Data='3389'} -MaxEvents 1 -ErrorAction Stop
+            if ($event) {
+                $props = @{
+                    "Fecha"   = $event.TimeCreated
+                    "Usuario" = $event.Properties[5].Value
+                    "Origen"  = $event.Properties[18].Value
+                }
+                return [PSCustomObject]$props
+            }
+        } catch {
+            return $null
+        }
+    }
 
 function Get-LastOutgoingRDPConnection {
     try {
@@ -1632,19 +1633,26 @@ function Analyze-SystemMemory {
     }
 }
 
-# --- MENÚ PRINCIPAL (MODIFICADO) ---
-# La función ahora solo se encarga de MOSTRAR el menú y DEVOLVER la selección del usuario.
-# Toda la lógica de qué hacer con esa selección se ha movido al bucle principal.
+Aquí tienes la parte final del código con el menú reorganizado como pediste.
+
+Cambios:
+
+Opción 88: "Activar Windows (Advertencia de Seguridad)"
+
+Opción 99: "Mensaje del Creador"
+
+Simplemente reemplaza todo el código en tu script desde function Show-MainMenu hasta el final con este bloque.
+
+Código Final (Desde el Menú hasta el Final)
+PowerShell
+
+# --- MENÚ PRINCIPAL ---
 function Show-MainMenu {
     Clear-Host
     Write-Host "=============================================" -ForegroundColor Green
-    Write-Host "=                                           =" -ForegroundColor Green
-    Write-Host "=        Herramienta de Seguridad MediTool  =" -ForegroundColor Green
-    Write-Host "=                                           =" -ForegroundColor Green
+    Write-Host "=         Herramienta de Auditoría MediTool         =" -ForegroundColor Green
     Write-Host "=============================================" -ForegroundColor Green
-    Write-Host "Bienvenido a MediTool, tu solucion de seguridad Blue Team."
-    Write-Host "Por favor, selecciona una opcion del menu:"
-    Write-Host ""
+    Write-Host "Versión 3.5.0 (Final) - por h00kGh0st & Programeta`n"
     
     $menuOptions = @(
         [PSCustomObject]@{ "ID" = 1; "Opcion" = "Revisar Estado de RDP y Ultimas Conexiones" },
@@ -1655,140 +1663,110 @@ function Show-MainMenu {
         [PSCustomObject]@{ "ID" = 6; "Opcion" = "Buscar Tareas Programadas Maliciosas" },
         [PSCustomObject]@{ "ID" = 7; "Opcion" = "Auditar Servicios No Esenciales" },      
         [PSCustomObject]@{ "ID" = 8; "Opcion" = "Buscar Cuentas de Usuario Inactivas" },
-        [PSCustomObject]@{ "ID" = 9; "Opcion" = "Verificar Firmas de Archivos Criticos" },
+        [PSCustomObject]@{ "ID" = 9; "Opcion" = "Verificar Firmas y Analizar Archivos (VirusTotal)" },
         [PSCustomObject]@{ "ID" = 10; "Opcion" = "Verificar Procesos en Ejecucion sin Firma" },
         [PSCustomObject]@{ "ID" = 11; "Opcion" = "Detener Procesos Sin Firma" },
         [PSCustomObject]@{ "ID" = 12; "Opcion" = "Bloquear Ejecucion de Archivo" },
         [PSCustomObject]@{ "ID" = 13; "Opcion" = "Auditar Registro de Inicio Automatico (Autorun)" },
-        [PSCustomObject]@{ "ID" = 14; "Opcion" = "Analizar Conexiones de Red" },
-        [PSCustomObject]@{ "ID" = 15; "Opcion" = "Mensaje ELMOnymous (h00kGh0st)" },
+        [PSCustomObject]@{ "ID" = 14; "Opcion" = "Analizar Conexiones de Red (Detallado)" },
         [PSCustomObject]@{ "ID" = 16; "Opcion" = "Buscar Archivos Ocultos" },
         [PSCustomObject]@{ "ID" = 17; "Opcion" = "Auditar Inicios de Sesion Fallidos" },
-        [PSCustomObject]@{ "ID" = 18; "Opcion" = "Activar Windows (Advertencia de Seguridad)" },
         [PSCustomObject]@{ "ID" = 19; "Opcion" = "Generar Reporte de Seguridad (HTML)" },
         [PSCustomObject]@{ "ID" = 20; "Opcion" = "Informacion del Usuario y Sistema" },
-        [PSCustomObject]@{ "ID" = 21; "Opcion" = "Gestor de Direcciones MAC" },
         [PSCustomObject]@{ "ID" = 22; "Opcion" = "Actualizar todas las aplicaciones (winget)" },
         [PSCustomObject]@{ "ID" = 23; "Opcion" = "Verificacion de Estado (ISO 27001 simplificado)" },
         [PSCustomObject]@{ "ID" = 24; "Opcion" = "Limpiar Archivos Temporales del Sistema" },
         [PSCustomObject]@{ "ID" = 25; "Opcion" = "Buscar Archivos de 0 Bytes" },
         [PSCustomObject]@{ "ID" = 26; "Opcion" = "Analizar Memoria del Sistema" },
+        [PSCustomObject]@{ "ID" = 27; "Opcion" = "Realizar Análisis Completo del Sistema para Reporte" },
+        [PSCustomObject]@{ "ID" = 28; "Opcion" = "Realizar Chequeo Anti-PEAS (Hardening)" },
+        [PSCustomObject]@{ "ID" = 29; "Opcion" = "Realizar Chequeo Anti-Robo-Credenciales (Hardening)" },
+        [PSCustomObject]@{ "ID" = 30; "Opcion" = "Auditar Eventos Críticos (Borrado de Logs)" },
+        [PSCustomObject]@{ "ID" = 31; "Opcion" = "Verificar Políticas de Seguridad Locales (UAC, BitLocker)" },
+        [PSCustomObject]@{ "ID" = 88; "Opcion" = "Activar Windows (Advertencia de Seguridad)" },
+        [PSCustomObject]@{ "ID" = 99; "Opcion" = "Mensaje del Creador" },
         [PSCustomObject]@{ "ID" = 0; "Opcion" = "Salir" }
     )
     
-    $script:menuOptions = $menuOptions # Hacemos el menú accesible globalmente para el logging
-    $menuOptions | Format-Table -Property @{Expression="ID"; Width=4}, Opcion -HideTableHeaders
+    $script:menuOptions = $menuOptions
     
-    $selection = Read-Host "Ingresa el numero de la opcion que deseas ejecutar"
-    return $selection
+    # Corrección para forzar la visualización del menú antes del prompt
+    $menuOptions | Format-Table -Property @{Expression="ID"; Width=4}, Opcion -HideTableHeaders | Out-String | Write-Host
+    
+    return Read-Host "Ingresa el numero de la opcion que deseas ejecutar"
 }
+
 
 # --- INICIO DEL SCRIPT Y BUCLE PRINCIPAL ---
 
-# 1. Capturar el estado inicial del sistema una sola vez al iniciar.
-Capture-InitialState
+# Inicia el bucle interactivo solo si el script tiene permisos de administrador
+if (Test-AdminPrivileges) {
 
-# 2. Iniciar el bucle del menú. Este bucle ahora controla la lógica de selección.
-while ($true) {
-    $selection = Show-MainMenu
-    
-    # Registrar la acción del usuario en nuestro log
-    $optionObject = $script:menuOptions | Where-Object { $_.ID -eq $selection }
-    if ($optionObject) {
-        Add-LogEntry -Message "Usuario seleccionó la opción '$($selection)': $($optionObject.Opcion)"
-    }
+    # 1. Capturar estado inicial de forma no interactiva
+    Write-Host "El script se está ejecutando con permisos de Administrador." -ForegroundColor Green
+    Capture-InitialState
 
-    switch ($selection) {
-        "1" {
-            $rdpIn = Get-LastIncomingRDPLogon
-            $rdpOut = Get-LastOutgoingRDPConnection
-            Write-Host "`nEstado del servicio RDP: $(Get-RDPStatus)"
-            Write-Host "`nUltima conexion RDP entrante:`n  - Fecha: $(if ($rdpIn) { $rdpIn.Fecha } else { 'N/A' })`n  - Usuario: $(if ($rdpIn) { $rdpIn.Usuario } else { 'N/A' })`n  - Origen: $(if ($rdpIn) { $rdpIn.Origen } else { 'N/A' })"
-            Write-Host "`nUltima conexion RDP saliente:`n  - Host/IP: $(if ($rdpOut) { $rdpOut.Host } else { 'N/A' })`n  - Fecha: $(if ($rdpOut) { $rdpOut.Fecha } else { 'N/A' })"
+    # 2. Iniciar el bucle del menú interactivo
+    while ($true) {
+        $selection = Show-MainMenu
+        
+        # Registrar la acción del usuario en el log
+        $optionObject = $script:menuOptions | Where-Object { $_.ID -eq $selection }
+        if ($optionObject) {
+            Add-LogEntry -Message "Usuario seleccionó la opción '$($selection)': $($optionObject.Opcion)"
         }
-        "2" { Get-FirewallStatus }
-        "3" { Fix-FirewallPorts }
-        "4" { Manage-RDP }
-        "5" { Manage-WindowsTelemetry }
-        "6" {
-            $tasks = Find-MaliciousScheduledTasks
-            if ($tasks.Count -gt 0) {
-                Write-Host "Se encontraron tareas programadas sospechosas:" -ForegroundColor Red
-                $tasks | Format-Table -AutoSize
-            } else {
-                Write-Host "No se encontraron tareas programadas sospechosas." -ForegroundColor Green
+
+        # Lógica para cada opción del menú
+        switch ($selection) {
+            "1" { Get-RDPStatus }
+            "2" { Get-FirewallStatus }
+            "3" { Fix-FirewallPorts }
+            "4" { Manage-RDP }
+            "5" { Manage-WindowsTelemetry }
+            "6" { Find-MaliciousScheduledTasks | Format-Table -AutoSize }
+            "7" { Audit-NonEssentialServices }
+            "8" { Find-InactiveUsers | Format-Table -AutoSize }
+            "9" { Verify-FileSignatures }
+            "10" { Find-UnsignedProcesses | Format-Table -AutoSize }
+            "11" { Stop-SuspiciousProcess }
+            "12" { Block-FileExecution }
+            "13" { Manage-RegistryAutorun }
+            "14" { Analyze-NetworkConnections }
+            "16" { Find-HiddenFilesAndScan }
+            "17" { Audit-FailedLogons }
+            "19" { Generate-HTMLReport }
+            "20" { Get-UserInfo | Format-List }
+            "22" { Update-AllWingetApps }
+            "23" { Check-ISO27001Status }
+            "24" { Clean-SystemJunk }
+            "25" { Find-OrphanedAndZeroByteFiles }
+            "26" { Analyze-SystemMemory }
+            "27" {
+                Write-Host "Iniciando análisis completo del sistema..." -ForegroundColor Yellow
+                Capture-InitialState
+                Write-Host "Análisis completo y captura de estado finalizados." -ForegroundColor Green
+            }
+            "28" { Invoke-PeasHardeningChecks }
+            "29" { Invoke-CredentialHardeningChecks }
+            "30" { Invoke-CriticalEventsAudit }
+            "31" { Invoke-LocalPolicyChecks }
+            "88" { Activate-Windows }
+            "99" { Write-Host "Copyright (c) 2023 h00kGh0st" -ForegroundColor Cyan }
+            "0" {
+                Clean-ScriptFromTemp
+                Write-Host "Saliendo del programa. ¡Adiós!" -ForegroundColor Green
+                Start-Sleep -Seconds 1
+                exit
+            }
+            default { 
+                Write-Host "Opción no válida. Por favor, intente de nuevo." -ForegroundColor Red 
             }
         }
-        "7" { Audit-NonEssentialServices }
-        "8" {
-            $inactiveUsers = Find-InactiveUsers
-            if ($inactiveUsers.Count -gt 0) {
-                Write-Host "Se encontraron las siguientes cuentas de usuario inactivas:" -ForegroundColor Red
-                $inactiveUsers | Format-Table -AutoSize
-            } else {
-                Write-Host "No se encontraron cuentas de usuario inactivas." -ForegroundColor Green
-            }
-        }
-        "9" { Verify-FileSignatures }
-        "10" {
-            $unsignedProcesses = Find-UnsignedProcesses
-            if ($unsignedProcesses.Count -gt 0) {
-                Write-Host "Se encontraron procesos en ejecucion sin firma digital:" -ForegroundColor Red
-                $unsignedProcesses | Format-Table -AutoSize
-            } else {
-                Write-Host "No se encontraron procesos sin firma." -ForegroundColor Green
-            }
-        }
-        "11" { Stop-SuspiciousProcess }
-        "12" { Block-FileExecution }
-        "13" { Find-RegistryAutorun }
-        "14" { Analyze-NetworkConnections }
-        "15" {
-            Write-Host "Copyright (c) 2023 h00kGh0st"
-        }
-        "16" { Find-HiddenFilesAndScan }
-        "17" { Audit-FailedLogons }
-        "18" { Activate-Windows }
-        "19" { Generate-HTMLReport }
-        "20" {
-            $info = Get-UserInfo
-            Write-Host "`nInformacion del Usuario y Sistema:" -ForegroundColor Yellow
-            Write-Host "  - Usuario actual: $($info.UsuarioActual)"
-            Write-Host "  - Nombre del equipo: $($info.NombreEquipo)"
-            Write-Host "`nInformacion de Administradores Locales:" -ForegroundColor Cyan
-            if ($info.AdministradoresLocales.Count -gt 0) {
-                $administrators = [string]::join(', ', $info.AdministradoresLocales)
-                Write-Host "  - Administradores locales: $administrators"
-            } else {
-                Write-Host "  - No se pudieron obtener los administradores locales." -ForegroundColor Red
-            }
-            Write-Host "`nInformacion de Adaptadores de Red:" -ForegroundColor Cyan
-            if ($info.Redes.Count -gt 0) {
-                $info.Redes | Format-Table -AutoSize
-            } else {
-                Write-Host "  - No se encontraron adaptadores de red activos." -ForegroundColor Red
-            }
-        }
-        "21" { MacChangerMenu }
-        "22" { Update-AllWingetApps }
-        "23" { Check-ISO27001Status }
-        "24" { Clean-SystemJunk }
-        "25" { Find-OrphanedAndZeroByteFiles }
-        "26" { Analyze-SystemMemory }
-        "0" {
-            Clean-TempFolder
-            Write-Host "Saliendo del programa. ¡Adiós!" -ForegroundColor Green
-            exit
-        }
-        default {
-            Write-Host "Opción no válida. Por favor, intente de nuevo." -ForegroundColor Red
+
+        # Pausa para que el usuario pueda ver el resultado antes de volver al menú
+        if ($selection -ne "0") {
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
     }
-
-    # Pausa para que el usuario pueda ver el resultado antes de volver al menú
-    if ($selection -ne "0") {
-        Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
-        Read-Host | Out-Null
-    }
-}
-
+} # --- FIN DEL BLOQUE QUE REQUIERE PERMISOS DE ADMINISTRADOR ---
