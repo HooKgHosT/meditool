@@ -1,10 +1,10 @@
 # Este script está diseñado como una herramienta de seguridad (Blue Team)
 # para la verificación y corrección de vulnerabilidades comunes en sistemas Windows 10 y 11.
-# Script version 2.1.0 (Versión Final Corregida por Programeta)
+# Script version 3.1.0 (Versión Definitiva por Programeta)
 
 # --- Lógica de autodescarga, elevación de permisos y limpieza ---
 $scriptName = "meditool.ps1"
-$scriptUrl = "https://raw.githubusercontent.com/HooKgHosT/meditool/main/meditool.ps1"
+$scriptUrl = "https://raw.githubusercontent.com/HooKgHosT/meditool/main/meditool.ps1" # URL de ejemplo
 $tempPath = Join-Path $env:TEMP $scriptName
 
 function Test-AdminPrivileges {
@@ -17,12 +17,10 @@ if (($MyInvocation.MyCommand.Path -ne $tempPath) -and (-not (Test-AdminPrivilege
         Write-Host "Iniciando la descarga del script temporal..." -ForegroundColor Yellow
         Invoke-WebRequest -Uri $scriptUrl -OutFile $tempPath -UseBasicParsing -ErrorAction Stop
         Write-Host "Descargado en: $tempPath" -ForegroundColor Cyan
-        
         Start-Process powershell -ArgumentList "-NoExit -ExecutionPolicy Bypass -File `"$tempPath`"" -Verb RunAs
         exit
     } catch {
         Write-Host "Error al descargar o relanzar el script: $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host "Asegúrese de tener conexión a Internet y de que el enlace sea correcto." -ForegroundColor Red
         Read-Host "Presione Enter para salir."
         exit 1
     }
@@ -36,6 +34,7 @@ if (Test-AdminPrivileges) {
 $global:ActionLog = [System.Collections.Generic.List[PSCustomObject]]::new()
 $global:InitialSystemState = $null
 $global:VirusTotalApiKey = $null
+$global:VirusTotalScans = [System.Collections.Generic.List[PSCustomObject]]::new()
 $OutputEncoding = [System.Text.UTF8Encoding]::new()
 
 # --- Funciones de Soporte ---
@@ -50,28 +49,15 @@ function Add-LogEntry {
 
 function Clean-ScriptFromTemp {
     if (Test-Path $tempPath) {
-        try {
-            Remove-Item -Path $tempPath -Force -ErrorAction SilentlyContinue
-            Write-Host "Script temporal eliminado de $env:TEMP" -ForegroundColor Cyan
-        } catch {
-            Write-Host "No se pudo eliminar el script temporal." -ForegroundColor Red
-        }
+        try { Remove-Item -Path $tempPath -Force -ErrorAction SilentlyContinue } catch {}
     }
 }
 
-# --- Funciones de Auditoría y Hardening ---
+# --- Bloque de Todas las Funciones de Auditoría y Hardening ---
 
-function Get-SafeAuthenticodeSignature {
-    param([string]$Path)
-    try {
-        if (Test-Path -Path $Path -PathType Leaf) {
-            return Get-AuthenticodeSignature -LiteralPath $Path -ErrorAction Stop
-        }
-    } catch {
-        return [PSCustomObject]@{ Status = "Unknown" }
-    }
-    return $null
-}
+function Get-SafeAuthenticodeSignature { param([string]$Path) ; try { if (Test-Path -Path $Path -PathType Leaf) { return Get-AuthenticodeSignature -LiteralPath $Path -ErrorAction Stop } } catch { return [PSCustomObject]@{ Status = "Unknown" } }; return $null }
+function Get-LastIncomingRDPLogon { try { $event = Get-WinEvent -FilterHashtable @{Logname='Security'; Id=4624; Data='3389'} -MaxEvents 1 -ErrorAction Stop; if ($event) { return [PSCustomObject]@{ Fecha = $event.TimeCreated; Usuario = $event.Properties[5].Value; Origen = $event.Properties[18].Value } } } catch { return $null }; return $null }
+function Get-LastOutgoingRDPConnection { try { $event = Get-WinEvent -FilterHashtable @{Logname='Microsoft-Windows-TerminalServices-Client/Operational'; Id=1024} -MaxEvents 1 -ErrorAction Stop; if ($event) { return [PSCustomObject]@{ Host = $event.Properties[1].Value; Fecha = $event.TimeCreated } } } catch { return $null }; return $null }
 
 function Get-RDPStatus {
     $rdpIn = Get-LastIncomingRDPLogon
@@ -81,27 +67,102 @@ function Get-RDPStatus {
         if ($service.Status -eq "Running") { Write-Host "Estado RDP: El servicio se está ejecutando." -ForegroundColor Yellow } 
         else { Write-Host "Estado RDP: El servicio está detenido." -ForegroundColor Green }
     } else { Write-Host "Estado RDP: El servicio no está instalado." -ForegroundColor Cyan }
-
-    Write-Host "`nÚltima Conexión Entrante:"
-    if ($rdpIn) { $rdpIn | Format-List } else { Write-Host "  N/A" }
-    Write-Host "`nÚltima Conexión Saliente:"
-    if ($rdpOut) { $rdpOut | Format-List } else { Write-Host "  N/A" }
+    Write-Host "`nÚltima Conexión Entrante:"; if ($rdpIn) { $rdpIn | Format-List } else { Write-Host "  N/A" }
+    Write-Host "`nÚltima Conexión Saliente:"; if ($rdpOut) { $rdpOut | Format-List } else { Write-Host "  N/A" }
 }
 
-function Get-LastIncomingRDPLogon {
+function Get-VirusTotalReport {
+    param([Parameter(Mandatory=$true)][string]$FilePath)
+    if (-not (Test-Path $FilePath)) { Write-Host "Error: El archivo '$FilePath' no fue encontrado." -ForegroundColor Red; return }
+    if ([string]::IsNullOrEmpty($global:VirusTotalApiKey)) {
+        Write-Host "Para usar esta función, necesitas una clave API de VirusTotal." -ForegroundColor Yellow
+        $global:VirusTotalApiKey = Read-Host "Por favor, ingresa tu clave API de VirusTotal"
+    }
     try {
-        $event = Get-WinEvent -FilterHashtable @{Logname='Security'; Id=4624; Data='3389'} -MaxEvents 1 -ErrorAction Stop
-        if ($event) { return [PSCustomObject]@{ Fecha = $event.TimeCreated; Usuario = $event.Properties[5].Value; Origen = $event.Properties[18].Value } }
-    } catch { return $null }
-    return $null
+        Write-Host "Calculando hash del archivo..." -ForegroundColor Cyan
+        $fileHash = (Get-FileHash -Path $FilePath -Algorithm SHA256).Hash
+        $headers = @{ "x-apikey" = $global:VirusTotalApiKey }
+        $uri = "https://www.virustotal.com/api/v3/files/$fileHash"
+        Write-Host "Consultando la API de VirusTotal..." -ForegroundColor Cyan
+        $response = Invoke-RestMethod -Uri $uri -Headers $headers -Method Get
+        $stats = $response.data.attributes.last_analysis_stats
+        $detections = $stats.malicious
+        $totalEngines = $stats.harmless + $stats.malicious + $stats.suspicious + $stats.undetected + $stats.timeout
+        $scanResult = [PSCustomObject]@{ File = $FilePath; Hash = $fileHash; Detections = $detections; Total = $totalEngines; Status = "OK" }
+        if ($detections -gt 0) {
+            Write-Host "¡ALERTA! VirusTotal detectó este archivo como malicioso." -ForegroundColor Red
+            Write-Host "Resultado: $detections / $totalEngines motores lo marcaron como malicioso." -ForegroundColor Red
+            $scanResult.Status = "Malicioso"
+        } else {
+            Write-Host "El archivo parece seguro según VirusTotal." -ForegroundColor Green
+            Write-Host "Resultado: $detections / $totalEngines motores lo marcaron como malicioso." -ForegroundColor Green
+            $scanResult.Status = "Limpio"
+        }
+        $global:VirusTotalScans.Add($scanResult)
+    } catch {
+        Write-Host "Ocurrió un error al contactar con VirusTotal. Verifica tu API Key o conexión." -ForegroundColor Red
+        $global:VirusTotalScans.Add([PSCustomObject]@{ File = $FilePath; Hash = "N/A"; Detections = "N/A"; Total = "N/A"; Status = "Error" })
+    }
 }
 
-function Get-LastOutgoingRDPConnection {
+function Verify-FileSignatures {
+    Write-Host "Verificando firmas de archivos en rutas críticas..." -ForegroundColor Yellow
+    $criticalPaths = @("$env:SystemRoot\System32", "$env:ProgramFiles", "$env:ProgramFiles(x86)")
+    $unsignedFiles = @()
+    foreach ($path in $criticalPaths) {
+        try {
+            $files = Get-ChildItem -Path $path -Recurse -File -Include "*.exe", "*.dll" -ErrorAction SilentlyContinue
+            foreach ($file in $files) {
+                if ((Get-SafeAuthenticodeSignature -Path $file.FullName).Status -ne "Valid") { $unsignedFiles += $file }
+            }
+        } catch { }
+    }
+    if ($unsignedFiles.Count -gt 0) {
+        Write-Host "Se encontraron archivos sin firma digital o con firma inválida:" -ForegroundColor Red
+        $unsignedFiles | Select-Object Name, DirectoryName, LastWriteTime | Format-Table -AutoSize
+        Write-Host "`n¿Qué desea hacer a continuación?" -ForegroundColor Cyan
+        Write-Host "1. Analizar un archivo de la lista con VirusTotal"
+        Write-Host "0. Volver al menú principal"
+        $option = Read-Host "Seleccione una opción"
+        if ($option -eq "1") {
+            $fileToScan = Read-Host "Ingrese la ruta completa del archivo que desea analizar"
+            Get-VirusTotalReport -FilePath $fileToScan
+        }
+    } else {
+        Write-Host "No se encontraron archivos críticos sin firmar." -ForegroundColor Green
+    }
+}
+
+function Generate-HTMLReport {
+    if ($null -eq $global:InitialSystemState) { Capture-InitialState }
+    Add-LogEntry -Message "Generando reporte de seguridad en HTML."
+    Write-Host "Generando reporte de seguridad..." -ForegroundColor Yellow
+    $reportData = $global:InitialSystemState
+    $head = "<style>body{font-family:'Segoe UI',sans-serif;margin:2em;background-color:#f4f4f9;color:#333}h1,h2{color:#2a2a72;border-bottom:2px solid #2a2a72;padding-bottom:.5em}table{width:100%;border-collapse:collapse;margin-top:1em}th,td{text-align:left;padding:8px;border:1px solid #ddd;word-break:break-all}th{background-color:#4a4a8c;color:white}.status-danger{color:#d9534f;font-weight:700}</style>"
+    $body = "<h1>Reporte de Seguridad - MediTool</h1><p><strong>Fecha:</strong> $(Get-Date)</p>"
+    $body += "<h2>Configuración Inicial</h2><p><strong>Usuario:</strong> $($reportData.InformacionSistema.UsuarioActual)</p><p><strong>Equipo:</strong> $($reportData.InformacionSistema.NombreEquipo)</p>"
+    # (Aquí se añadirían más secciones del reporte como Tareas, Procesos, etc.)
+
+    $body += "<h2>Resultados de Análisis con VirusTotal</h2>"
+    if ($global:VirusTotalScans.Count -gt 0) {
+        $body += "<table><thead><tr><th>Archivo</th><th>Hash (SHA256)</th><th>Detecciones</th><th>Total Motores</th><th>Estado</th></tr></thead><tbody>"
+        $global:VirusTotalScans | ForEach-Object {
+            $rowClass = if ($_.Status -eq "Malicioso") { "class='status-danger'" } else { "" }
+            $body += "<tr $rowClass><td>$($_.File)</td><td>$($_.Hash)</td><td>$($_.Detections)</td><td>$($_.Total)</td><td>$($_.Status)</td></tr>"
+        }
+        $body += "</tbody></table>"
+    } else {
+        $body += "<p>No se realizaron análisis con VirusTotal durante esta sesión.</p>"
+    }
+
+    $reportPath = Join-Path -Path ([Environment]::GetFolderPath("Desktop")) -ChildPath "Security_Report_$(Get-Date -Format 'yyyyMMdd_HHmmss').html"
     try {
-        $event = Get-WinEvent -FilterHashtable @{Logname='Microsoft-Windows-TerminalServices-Client/Operational'; Id=1024} -MaxEvents 1 -ErrorAction Stop
-        if ($event) { return [PSCustomObject]@{ Host = $event.Properties[1].Value; Fecha = $event.TimeCreated } }
-    } catch { return $null }
-    return $null
+        ConvertTo-Html -Head $head -Body $body | Out-File -FilePath $reportPath -Encoding utf8 -ErrorAction Stop
+        Write-Host "Reporte generado con éxito en: $reportPath" -ForegroundColor Green
+        Invoke-Item $reportPath
+    } catch {
+        Write-Host "Error al guardar el reporte: $($_.Exception.Message)" -ForegroundColor Red
+    }
 }
 
 function Invoke-PeasHardeningChecks {
@@ -982,7 +1043,8 @@ function Analyze-SystemMemory {
 }
 
 function Check-ISO27001Status {
-    Write-Host "`n--- Estado de Seguridad (Basado en ISO 27001) ---" -ForegroundColor Cyan
+    Write-Host "`n--------------------------------------------------" -ForegroundColor Cyan
+    Write-Host "--- Estado de Seguridad (Basado en ISO 27001) ---" -ForegroundColor Cyan
     
     # Control A.12.2.1: Controles contra el malware
     try {
@@ -1007,7 +1069,7 @@ function Check-ISO27001Status {
 # --- MENÚ PRINCIPAL ---
 function Show-MainMenu {
     Clear-Host
-    Write-Host "=====================================================" -ForegroundColor Green
+    Write-Host "`n=====================================================" -ForegroundColor Green
     Write-Host "=         Herramienta de Auditoría MediTool         =" -ForegroundColor Green
     Write-Host "=====================================================" -ForegroundColor Green
     Write-Host "Versión 1.4.0 (Final) - por h00kGh0st"
@@ -1047,10 +1109,11 @@ function Show-MainMenu {
         [PSCustomObject]@{ "ID" = 0; "Opcion" = "Salir" }
     )
     
-    $script:menuOptions = $menuOptions
+    $script:menuOptions = $menuOptions 
     $menuOptions | Format-Table -Property @{Expression="ID"; Width=4}, Opcion -HideTableHeaders
     
-    return Read-Host "Ingresa el numero de la opcion que deseas ejecutar"
+    $selection = Read-Host "Ingresa el numero de la opcion que deseas ejecutar"
+    return $selection
 }
 # El script ahora inicia directamente en el menú.
 # La función Capture-InitialState se llama desde la Opción 27 o desde la 19 (Reporte).
@@ -1062,13 +1125,9 @@ Capture-InitialState
 while ($true) {
     $selection = Show-MainMenu
     
-    # Registrar la acción del usuario en el log
     $optionObject = $script:menuOptions | Where-Object { $_.ID -eq $selection }
-    if ($optionObject) {
-        Add-LogEntry -Message "Usuario seleccionó la opción '$($selection)': $($optionObject.Opcion)"
-    }
+    if ($optionObject) { Add-LogEntry -Message "Usuario seleccionó la opción '$($selection)': $($optionObject.Opcion)" }
 
-    # Lógica para cada opción del menú
     switch ($selection) {
         "1" { Get-RDPStatus }
         "2" { Get-FirewallStatus }
