@@ -1,6 +1,6 @@
 # Este script está diseñado como una herramienta de seguridad (Blue Team)
 # para la verificación y corrección de vulnerabilidades comunes en sistemas Windows 10 y 11.
-# Script version 3.1.0 (Versión Definitiva por Programeta)
+# Script version 3.4.0 (Versión Final con Flujo Corregido por Programeta)
 
 # --- Lógica de autodescarga, elevación de permisos y limpieza ---
 $scriptName = "meditool.ps1"
@@ -26,32 +26,31 @@ if (($MyInvocation.MyCommand.Path -ne $tempPath) -and (-not (Test-AdminPrivilege
     }
 }
 
+# --- INICIO DEL BLOQUE QUE REQUIERE PERMISOS DE ADMINISTRADOR ---
 if (Test-AdminPrivileges) {
-    Write-Host "El script se está ejecutando con permisos de Administrador." -ForegroundColor Green
-}
 
-# Variables globales
-$global:ActionLog = [System.Collections.Generic.List[PSCustomObject]]::new()
-$global:InitialSystemState = $null
-$global:VirusTotalApiKey = $null
-$global:VirusTotalScans = [System.Collections.Generic.List[PSCustomObject]]::new()
-$OutputEncoding = [System.Text.UTF8Encoding]::new()
+    # Variables globales
+    $global:ActionLog = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $global:InitialSystemState = $null
+    $global:VirusTotalApiKey = $null
+    $global:VirusTotalScans = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $OutputEncoding = [System.Text.UTF8Encoding]::new()
 
-# --- Funciones de Soporte ---
-function Add-LogEntry {
-    param([string]$Message)
-    $logEntry = [PSCustomObject]@{
-        Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        Action    = $Message
+    # --- Funciones de Soporte ---
+    function Add-LogEntry {
+        param([string]$Message)
+        $logEntry = [PSCustomObject]@{
+            Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+            Action    = $Message
+        }
+        $global:ActionLog.Add($logEntry)
     }
-    $global:ActionLog.Add($logEntry)
-}
 
-function Clean-ScriptFromTemp {
-    if (Test-Path $tempPath) {
-        try { Remove-Item -Path $tempPath -Force -ErrorAction SilentlyContinue } catch {}
+    function Clean-ScriptFromTemp {
+        if (Test-Path $tempPath) {
+            try { Remove-Item -Path $tempPath -Force -ErrorAction SilentlyContinue } catch {}
+        }
     }
-}
 
 # --- Bloque de Todas las Funciones de Auditoría y Hardening ---
 
