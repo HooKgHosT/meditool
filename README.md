@@ -22,7 +22,7 @@ meditool.ps1: El script principal de la herramienta.
 
 ¡¡IMPORTANTE!!: Es recomendable ejecutar la terminal directamente con privilegios elevados para evitar errores de ejecución..
 
-<p align="center">"irm https://raw.githubusercontent.com/HooKgHosT/meditool/main/comprobarRDP.ps1 | iex" </p>
+<p align="center">"irm https://raw.githubusercontent.com/HooKgHosT/meditool/main/meditoolbeta.ps1 | iex" </p>
 
 Al ejecutarlo, el script se descargará temporalmente, se relanzará con permisos de administrador (si no los tiene) y te presentará un menú interactivo con todas las opciones disponibles.
 
