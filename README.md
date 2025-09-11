@@ -12,7 +12,7 @@ Análisis de Archivos y Procesos: Busca archivos y procesos en ejecución sin fi
 Gestión de Cuentas de Usuario: Identifica usuarios inactivos y analiza la política de contraseñas.
 Análisis de Red y Registro: Examina conexiones de red sospechosas y entradas de registro de inicio automático (Autorun).
 Reportes de Seguridad: Genera un reporte detallado en formato HTML para una revisión más sencilla.
-Utilitarios Adicionales: Incluye herramientas para cambiar la dirección MAC, actualizar aplicaciones con winget, limpiar archivos temporales y activar Windows de forma no oficial.
+Utilitarios Adicionales: Incluye herramientas para actualizar aplicaciones con winget, limpiar archivos temporales y activar Windows de forma no oficial.
 
 :card_file_box: Archivo del Código:
 
