@@ -4,8 +4,12 @@
 
 # --- Lógica de autodescarga, elevación de permisos y limpieza ---
 # Este script esta disenado como una herramienta de seguridad (Blue Team)
+# para la verificacion y correccion de vulnerabilidades comunes en sistemas Windows 10 y 11.
+# Script version 1.0.0
+
+# --- Logica de autodescarga, elevacion de permisos y limpieza ---
 $scriptName = "meditool.ps1"
-$scriptUrl = "https://raw.githubusercontent.com/HooKgHosT/meditool/main/meditoolbeta.ps1"
+$scriptUrl = "https://raw.githubusercontent.com/HooKgHosT/meditool/main/meditool.ps1"
 $tempPath = Join-Path $env:TEMP $scriptName
 
 function Test-AdminPrivileges {
@@ -40,36 +44,17 @@ if (($MyInvocation.MyCommand.Path -ne $tempPath) -and (-not (Test-AdminPrivilege
 
 # Esta parte solo se ejecuta si el script se ha relanzado con permisos de administrador.
 if (Test-AdminPrivileges) {
+    Write-Host "El script se esta ejecutando con permisos de Administrador." -ForegroundColor Green
+    } else {
+        Write-Host "El script no se esta ejecutando con permisos de Administrador. Se le solicita que se ejecute con permisos de Administrador." -ForegroundColor Red
+        Write-Host "Asegurese de tener conexion a Internet y de que el enlace sea correcto." -ForegroundColor Red
+        exit 1
+}
+# Al finalizar, se elimina el script temporal.
+
 # Cambiar la codificación para que se muestren los caracteres especiales correctamente
 $OutputEncoding = [System.Text.UTF8Encoding]::new()
 # Configurar la política de ejecución para permitir la ejecución del script
-
-# Variables globales
-$global:ActionLog = [System.Collections.Generic.List[PSCustomObject]]::new()
-$global:InitialSystemState = $null
-$global:FinalSystemState = $null # Nueva variable para el estado final
-function Add-LogEntry {
-    param([string]$Message)
-    $logEntry = [PSCustomObject]@{
-        Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        Action    = $Message
-    }
-    $global:ActionLog.Add($logEntry)
-}
-function Clear-TempFolder {
-    if (Test-Path $tempPath) { try { Remove-Item -Path $tempPath -Force -ErrorAction SilentlyContinue } catch {} }
-}
-
-    Write-Host "El script se esta ejecutando con permisos de Administrador." -ForegroundColor Green
-    
-    # El resto del script se ejecuta aquí...
-
-} else {
-    Write-Host "El script no se esta ejecutando con permisos de Administrador. Se le solicita que se ejecute con permisos de Administrador." -ForegroundColor Red
-    Write-Host "Asegurese de tener conexion a Internet y de que el enlace sea correcto." -ForegroundColor Red
-    exit 1
-}
-
 
 # --- Funciones de seguridad ---
 function Invoke-PeasHardeningChecks {
@@ -86,9 +71,9 @@ function Invoke-PeasHardeningChecks {
     $value2 = Get-ItemPropertyValue -Path $keyPath2 -Name "AlwaysInstallElevated" -ErrorAction SilentlyContinue
     if ($value1 -eq 1 -and $value2 -eq 1) {
         Write-Host "[VULNERABLE] La politica 'AlwaysInstallElevated' esta activada." -ForegroundColor Red
-        $fix = Read-Host "¿Desea deshabilitar esta politica ahora? (S/N)"; if ($fix -eq 's') { Set-ItemProperty -Path $keyPath1 -Name "AlwaysInstallElevated" -Value 0; Set-ItemProperty -Path $keyPath2 -Name "AlwaysInstallElevated" -Value 0; Write-Host "[CORREGIDO] La politica ha sido deshabilitada." -ForegroundColor Green; Add-LogEntry -Message "Politica 'AlwaysInstallElevated' deshabilitada." }
-    } else { Write-Host "[OK] La politica 'AlwaysInstallElevated' no esta activada." -ForegroundColor Green }
-    Write-Host "`n[3] Listando credenciales guardadas por el sistema (cmdkey)..." -ForegroundColor Yellow # This line is duplicated in the context file.
+        $fix = Read-Host "¿Desea deshabilitar esta politica ahora? (S/N)"; if ($fix -eq 's') { Set-ItemProperty -Path $keyPath1 -Name "AlwaysInstallated" -Value 0; Set-ItemProperty -Path $keyPath2 -Name "AlwaysInstallated" -Value 0; Write-Host "[CORREGIDO] La politica ha sido deshabilitada." -ForegroundColor Green; Add-LogEntry -Message "Politica 'AlwaysInstallated' deshabilitada." }
+    } else { Write-Host "[OK] La politica 'AlwaysInstallated' no esta activada." -ForegroundColor Green }
+    Write-Host "`n[3] Listando credenciales guardadas por el sistema (cmdkey)..." -ForegroundColor Yellow
     $credList = cmdkey /list
     if ($credList -match "Currently stored credentials") { Write-Host "[INFO] Se encontraron las siguientes credenciales guardadas. Revise si son necesarias:" -ForegroundColor Cyan; $credList } 
     else { Write-Host "[OK] No se encontraron credenciales guardadas con cmdkey." -ForegroundColor Green }
@@ -97,6 +82,183 @@ function Invoke-PeasHardeningChecks {
     if ($psv2Feature.State -eq 'Enabled') { Write-Host "[ADVERTENCIA] El motor de PowerShell v2 esta HABILITADO. Se recomienda deshabilitarlo." -ForegroundColor Yellow } 
     else { Write-Host "[OK] El motor de PowerShell v2 esta deshabilitado." -ForegroundColor Green }
     Write-Host "`n--- Chequeo de Hardening finalizado ---" -ForegroundColor Cyan
+}
+function Invoke-CredentialHardeningChecks {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    param()
+
+    function New-HardeningResult {
+        param(
+            [string]$CheckName,
+            [string]$Mitigation,
+            [ValidateSet('PROTEGIDO', 'VULNERABLE', 'ERROR', 'INFO')]
+            [string]$Status,
+            [string]$Details,
+            [scriptblock]$FixScript,
+            [scriptblock]$CheckScript
+        )
+        return [PSCustomObject]@{
+            CheckName   = $CheckName
+            Mitigation  = $Mitigation
+            Status      = $Status
+            Details     = $Details
+            FixScript   = $FixScript
+            CheckScript = $CheckScript
+        }
+    }
+
+    function Test-CredentialGuardPrerequisites {
+        Write-Host "`n--- Comprobando requisitos para Credential Guard ---" -ForegroundColor Cyan
+        $remediationSteps = [System.Collections.Generic.List[string]]::new()
+        $allMet = $true
+
+        # 1. Comprobacion de Sistema Operativo
+        $osInfo = Get-CimInstance -ClassName Win32_OperatingSystem
+        if ($osInfo.Caption -notlike "*Enterprise*" -and $osInfo.Caption -notlike "*Education*") {
+            $remediationSteps.Add("El SO debe ser Windows Enterprise/Education. Version actual: $($osInfo.Caption)")
+            $allMet = $false
+        }
+
+        # 2. Comprobacion de Secure Boot
+        try {
+            if (-not (Confirm-SecureBootUEFI -ErrorAction Stop)) {
+                $remediationSteps.Add("Secure Boot esta deshabilitado. Debes activarlo en la BIOS/UEFI.")
+                $allMet = $false
+            }
+        } catch {
+            $remediationSteps.Add("No se pudo confirmar el estado de Secure Boot (el sistema puede no ser UEFI).")
+            $allMet = $false
+        }
+
+        # 3. Comprobacion de Virtualizacion en Firmware
+        $vbs = (Get-CimInstance -ClassName Win32_DeviceGuard -Namespace 'Root\Microsoft\Windows\DeviceGuard' -ErrorAction SilentlyContinue)
+        if (-not $vbs.VirtualizationBasedSecurityStatus -eq 2) {
+             if (-not ((Get-ComputerInfo).HyperVRequirementDataVirtualizationEnabledInFirmware)) {
+                $remediationSteps.Add("La virtualizacion de CPU (Intel VT-x / AMD-V) esta deshabilitada en la BIOS/UEFI.")
+                $allMet = $false
+             }
+        }
+
+        if ($allMet) {
+            Write-Host "[OK] Tu sistema CUMPLE con los requisitos para Credential Guard." -ForegroundColor Green
+            Write-Host "Puedes habilitarlo usando la Politica de Grupo (GPO) en:" -ForegroundColor White
+            Write-Host "  'Configuracion del Equipo > Plantillas Administrativas > Sistema > Device Guard'" -ForegroundColor White
+            Write-Host "  Habilitando 'Activar seguridad basada en virtualizacion' y seleccionando 'Credential Guard'." -ForegroundColor White
+            Write-Host "Se requerira un reinicio." -ForegroundColor White
+        } else {
+            Write-Host "[AVISO] Tu sistema NO CUMPLE con todos los requisitos para Credential Guard." -ForegroundColor Yellow
+            Write-Host "Pasos para corregirlo manualmente:" -ForegroundColor White
+            $remediationSteps | ForEach-Object { Write-Host " - $_" -ForegroundColor White }
+        }
+    }
+
+    $results = [System.Collections.Generic.List[PSObject]]::new()
+    $lsaKey = 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'
+    $wdigestKey = 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest'
+    $rebootNeeded = $false
+
+    $fixLsa = {
+        try {
+            if (-not (Test-Path $lsaKey)) { New-Item -Path $lsaKey -Force | Out-Null }
+            Set-ItemProperty -Path $lsaKey -Name "RunAsPPL" -Value 1 -Type DWord -Force -ErrorAction Stop
+            Write-Host "[OK] La proteccion LSA ha sido HABILITADA." -ForegroundColor Green
+            $script:rebootNeeded = $true
+        } catch { Write-Error "No se pudo habilitar la proteccion LSA. Ejecuta el script como Administrador." }
+    }
+    try {
+        $lsaProtection = Get-ItemPropertyValue -Path $lsaKey -Name "RunAsPPL" -ErrorAction SilentlyContinue
+        if ($lsaProtection -eq 1) {
+            $results.Add((New-HardeningResult 'Proteccion LSA' 'RunAsPPL' 'PROTEGIDO' 'LSA esta protegido. Mimikatz no puede acceder directamente a lsass.exe.'))
+        } else {
+            $results.Add((New-HardeningResult 'Proteccion LSA' 'RunAsPPL' 'VULNERABLE' 'La proteccion LSA esta DESHABILITADA o mal configurada.' -FixScript $fixLsa))
+        }
+    }
+    catch {
+        $results.Add((New-HardeningResult 'Proteccion LSA' 'RunAsPPL' 'VULNERABLE' 'La proteccion LSA esta DESHABILITADA (la clave de registro no existe).' -FixScript $fixLsa))
+    }
+
+    $fixWdigest = {
+        try {
+            if (-not (Test-Path $wdigestKey)) { New-Item -Path $wdigestKey -Force | Out-Null }
+            Set-ItemProperty -Path $wdigestKey -Name "UseLogonCredential" -Value 0 -Type DWord -Force -ErrorAction Stop
+            Write-Host "[OK] WDigest ha sido DESHABILITADO." -ForegroundColor Green
+        } catch { Write-Error "No se pudo deshabilitar WDigest. Ejecuta el script como Administrador." }
+    }
+    try {
+        $wdigestValue = Get-ItemPropertyValue -Path $wdigestKey -Name "UseLogonCredential" -ErrorAction SilentlyContinue
+        if ($wdigestValue -eq 0) {
+            $results.Add((New-HardeningResult 'WDigest' 'UseLogonCredential' 'PROTEGIDO' 'WDigest esta deshabilitado. Las contrasenas no se guardan en texto plano.'))
+        } else {
+            $results.Add((New-HardeningResult 'WDigest' 'UseLogonCredential' 'VULNERABLE' 'WDigest esta HABILITADO. Las contrasenas pueden ser extraidas de la memoria.' -FixScript $fixWdigest))
+        }
+    }
+    catch {
+        $results.Add((New-HardeningResult 'WDigest' 'UseLogonCredential' 'PROTEGIDO' 'WDigest esta deshabilitado (la clave de registro no existe).'))
+    }
+
+    try {
+        $guard = Get-CimInstance -ClassName Win32_DeviceGuard -Namespace 'Root\Microsoft\Windows\DeviceGuard' -ErrorAction Stop
+        if ($guard.SecurityServicesRunning -contains 1) {
+            $results.Add((New-HardeningResult 'Credential Guard' 'Virtual Secure Mode' 'PROTEGIDO' 'Credential Guard esta activo, aislando las credenciales del sistema.'))
+        } else {
+            $results.Add((New-HardeningResult 'Credential Guard' 'Virtual Secure Mode' 'VULNERABLE' 'No esta en ejecucion.' -CheckScript ${function:Test-CredentialGuardPrerequisites}))
+        }
+    }
+    catch {
+        $results.Add((New-HardeningResult 'Credential Guard' 'Virtual Secure Mode' 'INFO' 'No se pudo determinar el estado (puede no ser soportado por el hardware/SO).'))
+    }
+
+    Write-Host @"
+================================================================
+== Chequeos de Hardening contra Robo de Credenciales (Mimikatz) ==
+================================================================
+"@ -ForegroundColor Cyan
+    
+    $header = ("{0,-12} {1,-20} {2,-20} {3}" -f "Resultado", "Comprobacion", "Mitigacion", "Detalles")
+    Write-Host $header -ForegroundColor White
+    Write-Host ("-" * ($header.Length + 30)) -ForegroundColor White
+
+    foreach ($item in $results) {
+        $status = $item.Status
+        $color = switch ($status) {
+            'PROTEGIDO' { 'Green' }
+            'VULNERABLE'{ 'Red' }
+            'INFO'      { 'Cyan' }
+            'ERROR'     { 'Magenta' }
+            default     { 'White' }
+        }
+        $statusText = "[$status]"
+        $line = "{0,-12} {1,-20} {2,-20} {3}" -f $statusText, $item.CheckName, $item.Mitigation, $item.Details
+        Write-Host -Object $line -ForegroundColor $color
+    }
+
+    $vulnerabilitiesToFix = @($results | Where-Object { $_.Status -eq 'VULNERABLE' })
+    if ($vulnerabilitiesToFix.Count -gt 0) {
+        Write-Host "`nSe han encontrado vulnerabilidades." -ForegroundColor Yellow
+        
+        foreach ($vuln in $vulnerabilitiesToFix) {
+            if ($vuln.FixScript) {
+                $prompt = "?Deseas corregir la vulnerabilidad '$($vuln.CheckName)'? (S/N)"
+                $response = Read-Host -Prompt $prompt
+                if ($response -match '^[sS]$') {
+                    if ($PSCmdlet.ShouldProcess("el sistema para habilitar '$($vuln.CheckName)'", "Corregir Vulnerabilidad")) {
+                        Invoke-Command -ScriptBlock $vuln.FixScript
+                    }
+                }
+            }
+            elseif ($vuln.CheckScript) {
+                $prompt = "?Deseas comprobar si se puede solucionar la vulnerabilidad '$($vuln.CheckName)'? (S/N)"
+                $response = Read-Host -Prompt $prompt
+                if ($response -match '^[sS]$') {
+                    Invoke-Command -ScriptBlock $vuln.CheckScript
+                }
+            }
+        }
+    }
+
+    if ($rebootNeeded) {
+        Write-Host "`n[IMPORTANTE] Uno o mas cambios requieren un reinicio del sistema para ser aplicados completamente." -ForegroundColor Yellow
+    }
 }
 function Invoke-CriticalEventsAudit {
     Write-Host "`n--- Realizando Auditoria de Eventos de Seguridad Criticos ---" -ForegroundColor Cyan
@@ -178,6 +340,87 @@ function Get-LastOutgoingRDPConnection {
         }
     } catch {
         return $null
+    }
+}
+function Get-FirewallStatus {
+    Write-Host "`nMostrando reglas de firewall de entrada activas (visibilidad optimizada para consolas)..." -ForegroundColor Yellow
+    
+    try {
+        $allRules = Get-NetFirewallRule | Where-Object { 
+            $_.Enabled -eq "True" -and ($_.Direction -eq "Inbound" -or $_.Direction -eq "Both") -and ($_.Action -eq "Allow") -and -not [string]::IsNullOrEmpty($_.ProgramName)
+        }
+
+        if ($allRules.Count -gt 0) {
+            Write-Host "Se encontraron las siguientes reglas de firewall:" -ForegroundColor Green
+            
+            $allRules | ForEach-Object {
+                $rule = $_
+                $programName = Split-Path -Path $rule.ProgramName -Leaf
+                $process = Get-Process -Name $programName -ErrorAction SilentlyContinue | Select-Object -First 1
+                $pid = if ($process) { $process.Id } else { "N/A" }
+                
+                Write-Host "Regla: $($rule.DisplayName)" -ForegroundColor White
+                Write-Host "  - Programa: $programName" -ForegroundColor Cyan
+                Write-Host "  - PID: $pid" -ForegroundColor Cyan
+                Write-Host "  - Protocolo: $($rule.Protocol)" -ForegroundColor Cyan
+                Write-Host "  - Puerto: $($rule.LocalPort)" -ForegroundColor Cyan
+                Write-Host "--------------------------------"
+            }
+        } else {
+            Write-Host "No se encontraron reglas de firewall que permitan conexiones entrantes." -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "Error al obtener las reglas del Firewall. Verifique si el comando se ejecuto con privilegios de Administrador y reintente." -ForegroundColor Red
+    }
+}
+function Stop-OrBlock-Process {
+    param (
+        [Parameter(Mandatory=$true)]
+        [int]$pid,
+        [Parameter(Mandatory=$true)]
+        [string]$action
+    )
+    
+    try {
+        $process = Get-Process -Id $pid -ErrorAction Stop
+        $processPath = $process.Path
+        $programName = Split-Path -Path $processPath -Leaf
+
+        if ($action -eq "close") {
+            Stop-Process -Id $pid -Force
+            Write-Host "Proceso '$programName' con PID $pid cerrado exitosamente." -ForegroundColor Green
+        } elseif ($action -eq "block") {
+            $ruleName = "Bloqueado por MediTool - $programName"
+            $existingRule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
+            
+            if (-not $existingRule) {
+                New-NetFirewallRule -DisplayName $ruleName -Direction Outbound -Program $processPath -Action Block
+                Write-Host "Regla de firewall creada para bloquear el programa '$programName'." -ForegroundColor Green
+            } else {
+                Write-Host "Una regla de firewall para '$programName' ya existe. No se realizaron cambios." -ForegroundColor Yellow
+            }
+            
+            Write-Host "Cerrando el proceso para aplicar el cambio..." -ForegroundColor Cyan
+            Stop-Process -Id $pid -Force
+            Write-Host "Proceso '$programName' con PID $pid cerrado exitosamente." -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "Error: No se pudo encontrar o manipular el proceso con el PID $pid. Verifique el PID y los permisos de Administrador." -ForegroundColor Red
+    }
+}
+function Fix-FirewallPorts {
+    Write-Host "Cerrando puertos abiertos no seguros..." -ForegroundColor Yellow
+    try {
+        $rules = Get-NetFirewallRule | Where-Object { $_.Enabled -eq "True" -and $_.Direction -eq "Inbound" -and $_.Action -eq "Allow" -and ($_.LocalPort -eq "3389" -or $_.LocalPort -eq "5985" -or $_.LocalPort -eq "5986") }
+        if ($rules.Count -gt 0) {
+            Write-Host "Se encontraron $(@($rules).Count) reglas que seran eliminadas." -ForegroundColor Red
+            $rules | Remove-NetFirewallRule -Confirm:$false
+            Write-Host "Puertos cerrados exitosamente." -ForegroundColor Green
+        } else {
+            Write-Host "No se encontraron reglas de firewall inseguras que eliminar." -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "Error al intentar cerrar los puertos. Asegurese de tener permisos de Administrador." -ForegroundColor Red
     }
 }
 function Set-RDP {
@@ -553,6 +796,7 @@ function Find-RegistryAutorun {
         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce"
     )
     $suspiciousEntries = @()
+    $suspiciousProcesses = @()
 
     # Lista de programas comunes a excluir.
     $excludedPrograms = @(
@@ -565,7 +809,7 @@ function Find-RegistryAutorun {
             if ($keys) {
                 $keys.PSObject.Properties | ForEach-Object {
                     $prop = $_
-                    if ($prop.Name -notin @("PSPath", "PSDrive", "PSProvider", "PSParentPath", "PSChildName")) {
+                    if ($prop.Name -ne "PSPath" -and $prop.Name -ne "PSDrive" -and $prop.Name -ne "PSProvider" -and $prop.Name -ne "PSParentPath") {
                         $propValue = $prop.Value.ToLower()
                         
                         # Usa una logica de exclusion mas robusta
@@ -595,10 +839,56 @@ function Find-RegistryAutorun {
         } catch { }
     }
     
-    if ($suspiciousEntries.Count -gt 0) {
-        Write-Host "Se encontraron las siguientes entradas de Autorun sospechosas:" -ForegroundColor Red
-        $suspiciousEntries | Format-Table -AutoSize
+    if ($suspiciousProcesses.Count -gt 0) {
+        Write-Host "Se encontraron los siguientes procesos sospechosos en ejecucion:" -ForegroundColor Red
+        $suspiciousProcesses | Format-Table -AutoSize
         
+        Write-Host "`n¿Que desea hacer a continuacion?" -ForegroundColor Cyan
+        Write-Host "1. Detener un proceso de esta lista"
+        Write-Host "2. Eliminar una entrada de la lista de Autorun"
+        Write-Host "0. Volver al menu principal"
+        
+        $option = Read-Host "Seleccione una opcion"
+        
+        switch ($option) {
+            "1" {
+                Write-Host "Ingrese el PID del proceso que desea detener:" -ForegroundColor Cyan
+                $pidToStop = Read-Host "PID del Proceso"
+                
+                try {
+                    Stop-Process -Id $pidToStop -Force -ErrorAction Stop
+                    Write-Host "Proceso con PID $pidToStop detenido exitosamente." -ForegroundColor Green
+                } catch {
+                    Write-Host "Error al detener el proceso. Verifique el PID y los permisos de Administrador." -ForegroundColor Red
+                }
+            }
+            "2" {
+                Write-Host "Ingrese el nombre de la Clave que desea eliminar (de la columna 'Clave de Registro'):" -ForegroundColor Cyan
+                $keyToBlock = Read-Host "Nombre de la Clave"
+                
+                $entryToBlock = $suspiciousProcesses | Where-Object { $_."Clave de Registro" -eq $keyToBlock } | Select-Object -First 1
+                
+                if ($entryToBlock) {
+                    try {
+                        Write-Host "Eliminando la clave del registro..." -ForegroundColor Yellow
+                        Remove-ItemProperty -Path $entryToBlock."Ubicacion de Registro" -Name $entryToBlock."Clave de Registro" -Force -ErrorAction Stop
+                        Write-Host "Clave del registro eliminada exitosamente." -ForegroundColor Green
+                    } catch {
+                        Write-Host "Error al eliminar la clave. Asegurese de tener permisos de Administrador." -ForegroundColor Red
+                    }
+                } else {
+                    Write-Host "No se encontro la clave. Intente de nuevo." -ForegroundColor Red
+                }
+            }
+            "0" {
+                # Volver al menu principal.
+            }
+            default {
+                Write-Host "Opcion no valida. Volviendo al menu principal." -ForegroundColor Red
+            }
+        }
+    } elseif ($suspiciousEntries.Count -gt 0) {
+        Write-Host "Se encontraron entradas de inicio automatico sospechosas, pero no hay procesos en ejecucion asociados." -ForegroundColor Yellow
         Write-Host "`n¿Que desea hacer a continuacion?" -ForegroundColor Cyan
         Write-Host "1. Eliminar una entrada de la lista de Autorun"
         Write-Host "0. Volver al menu principal"
@@ -621,14 +911,14 @@ function Find-RegistryAutorun {
                         Write-Host "Error al eliminar la clave. Asegurese de tener permisos de Administrador." -ForegroundColor Red
                     }
                 } else {
-                    Write-Host "No se encontro la clave especificada." -ForegroundColor Red
+                    Write-Host "No se encontro la clave. Intente de nuevo." -ForegroundColor Red
                 }
             }
             "0" {
                 # Volver al menu principal.
             }
             default {
-                Write-Host "Opcion no valida." -ForegroundColor Red
+                Write-Host "Opcion no valida. Volviendo al menu principal." -ForegroundColor Red
             }
         }
     } else {
@@ -773,474 +1063,6 @@ function Test-NetworkConnections {
         }
     } catch {
         Write-Warning "Ocurrió un error general durante el análisis de conexiones: $($_.Exception.Message)"
-    }
-}
-function Invoke-WinPEAS {
-    [CmdletBinding(SupportsShouldProcess = $true)]
-    param()
-    Write-Host "`n--- Ejecutando WinPEAS para buscar vectores de escalada de privilegios ---" -ForegroundColor Cyan
-    if ($PSCmdlet.ShouldProcess("el sistema para buscar debilidades de configuracion", "Ejecutar WinPEAS")) {
-        try {
-            # Forzar el uso de TLS 1.2 para compatibilidad con GitHub
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-
-            $architecture = $env:PROCESSOR_ARCHITECTURE
-            $winpeasUrl = ""
-            if ($architecture -eq 'AMD64') {
-                $winpeasUrl = "https://github.com/peass-ng/PEASS-ng/releases/latest/download/winPEASx64.exe"
-                Write-Host "Detectada arquitectura de 64 bits. Descargando winPEASx64.exe..." -ForegroundColor Yellow
-            } else {
-                $winpeasUrl = "https://github.com/peass-ng/PEASS-ng/releases/latest/download/winPEASx86.exe"
-                Write-Host "Detectada arquitectura de 32 bits. Descargando winPEASx86.exe..." -ForegroundColor Yellow
-            }
-
-            $tempFile = New-TemporaryFile
-            Invoke-WebRequest -Uri $winpeasUrl -OutFile $tempFile.FullName -UseBasicParsing -ErrorAction Stop
-            Write-Host "Ejecutando winPEAS... (los resultados se mostraran a continuacion)" -ForegroundColor Green
-            Start-Process -FilePath $tempFile.FullName -Wait
-            Remove-Item -Path $tempFile.FullName -Force -ErrorAction SilentlyContinue
-        } catch {
-            Write-Error "Ocurrio un error al descargar o ejecutar WinPEAS. Verifica tu conexion a internet."
-            Write-Error "Detalles: $($_.Exception.Message)"
-        }
-    }
-}
-function Invoke-FirewallAudit {
-    [CmdletBinding()]
-    param()
-
-    Write-Host "`n--- Auditoría de Conexiones de Red Activas (netstat) ---" -ForegroundColor Cyan
-    Write-Host "Obteniendo conexiones activas... Esto puede tardar un momento."
-
-    try {
-        $netstatOutput = netstat -ban
-        $connections = [System.Collections.Generic.List[PSObject]]::new()
-        $currentProcess = ""
-
-        foreach ($line in ($netstatOutput | Where-Object { $_ -match '\S' })) {
-            if ($line -match '\[(.+?)\]') { # Captura el nombre del ejecutable, ej: [svchost.exe]
-                $currentProcess = $matches[1].Trim()
-            }
-            elseif ($line.Trim() -match '^(TCP|UDP)\s+([\d\.:\*]+)\s+([\d\.:\*]+)\s+(\w+)\s+(\d+)') { # Captura la linea de conexion
-                $connections.Add([PSCustomObject]@{
-                    Protocolo = $matches[1]
-                    DirLocal  = $matches[2]
-                    DirRemota = $matches[3]
-                    Estado    = $matches[4]
-                    PID       = $matches[5]
-                    Proceso   = $currentProcess
-                })
-            }
-        }
-
-        if ($connections.Count -eq 0) {
-            Write-Host "[OK] No se encontraron conexiones activas o no se pudo parsear la salida de netstat." -ForegroundColor Green
-            return
-        }
-
-        Write-Host "Se han encontrado $($connections.Count) conexiones activas." -ForegroundColor Yellow
-        $connections | Format-Table -AutoSize
-
-        while ($true) {
-            $pidToAction = Read-Host "`n? Ingrese el PID de un proceso para gestionarlo (o '0' para volver al menú)"
-            if ($pidToAction -eq '0') { break }
-
-            $targetProcessInfo = $connections | Where-Object { $_.PID -eq $pidToAction } | Select-Object -First 1
-            if (-not $targetProcessInfo) {
-                Write-Warning "El PID '$pidToAction' no se encuentra en la lista."
-                continue
-            }
-
-            try {
-                $process = Get-Process -Id $pidToAction -ErrorAction Stop
-                Write-Host "`n--- Gestionando Proceso: $($process.Name) (PID: $($process.Id)) ---" -ForegroundColor Cyan
-                Write-Host "  Ruta: $($process.Path)"
-                Write-Host "  1. Terminar Proceso"
-                Write-Host "  2. Bloquear con Firewall (Saliente)"
-                Write-Host "  3. Analizar con VirusTotal"
-                Write-Host "  4. Eliminar Archivo Ejecutable (¡PELIGRO!)"
-                Write-Host "  0. Seleccionar otro proceso"
-
-                $actionChoice = Read-Host "? Qué acción desea realizar?"
-
-                switch ($actionChoice) {
-                    '1' {
-                        Write-Host "Terminando proceso..." -ForegroundColor Yellow
-                        Stop-Process -Id $process.Id -Force
-                        Write-Host "[OK] Proceso terminado." -ForegroundColor Green
-                    }
-                    '2' {
-                        if ($process.Path) {
-                            Write-Host "Bloqueando ejecutable con el firewall..." -ForegroundColor Yellow
-                            Block-FileExecution -FileToBlock $process.Path
-                        } else {
-                            Write-Warning "No se puede bloquear porque no se encontró la ruta del ejecutable."
-                        }
-                    }
-                    '3' {
-                        if ($process.Path) {
-                            Get-VirusTotalReport -FilePath $process.Path
-                        } else {
-                            Write-Warning "No se puede analizar porque no se encontró la ruta del ejecutable."
-                        }
-                    }
-                    '4' {
-                        if ($process.Path) {
-                            $confirmDelete = Read-Host "¿ESTÁ SEGURO de que desea eliminar '$($process.Path)'? Esta acción es irreversible. (S/N)"
-                            if ($confirmDelete -eq 's') {
-                                Write-Host "Primero se detendrá el proceso..." -ForegroundColor Yellow
-                                Stop-Process -Id $process.Id -Force
-                                Start-Sleep -Seconds 1
-                                Write-Host "Eliminando archivo..." -ForegroundColor Red
-                                Remove-Item -Path $process.Path -Force
-                                Write-Host "[OK] Archivo eliminado." -ForegroundColor Green
-                            } else {
-                                Write-Host "Eliminación cancelada." -ForegroundColor Yellow
-                            }
-                        } else {
-                            Write-Warning "No se puede eliminar porque no se encontró la ruta del ejecutable."
-                        }
-                    }
-                    '0' { continue }
-                    default { Write-Warning "Opción no válida." }
-                }
-
-            } catch {
-                Write-Error "No se pudo obtener información del proceso con PID $pidToAction. Puede que ya se haya cerrado."
-            }
-        }
-
-    } catch {
-        Write-Error "Ocurrió un error al ejecutar 'netstat'. Detalles: $($_.Exception.Message)"
-    }
-}
-function Invoke-PortAnalysis {
-    [CmdletBinding()]
-    param()
-
-    Write-Host "`n--- Análisis de Puertos en Escucha (LISTENING) ---" -ForegroundColor Cyan
-    try {
-        $listeningPorts = Get-NetTCPConnection -State Listen -ErrorAction Stop
-
-        if (-not $listeningPorts) {
-            Write-Host "[OK] No se encontraron puertos TCP en estado de escucha." -ForegroundColor Green
-            return
-        }
-
-        $portInfo = foreach ($port in $listeningPorts) {
-            try {
-                $process = Get-Process -Id $port.OwningProcess -ErrorAction SilentlyContinue
-                [PSCustomObject]@{
-                    PuertoLocal = $port.LocalPort
-                    Direccion   = $port.LocalAddress
-                    PID         = $port.OwningProcess
-                    Proceso     = if ($process) { $process.Name } else { "No disponible" }
-                    Ruta        = if ($process) { $process.Path } else { "No disponible" }
-                }
-            } catch {
-                # Proceso podría haber terminado
-            }
-        }
-
-        Write-Host "Se encontraron los siguientes puertos en escucha:" -ForegroundColor Yellow
-        $portInfo | Format-Table -AutoSize
-
-        while ($true) {
-            $pidToAction = Read-Host "`n? Ingrese el PID de un proceso para gestionarlo (o '0' para volver al menú)"
-            if ($pidToAction -eq '0') { break }
-
-            $targetProcessInfo = $portInfo | Where-Object { $_.PID -eq $pidToAction } | Select-Object -First 1
-            if (-not $targetProcessInfo) {
-                Write-Warning "El PID '$pidToAction' no se encuentra en la lista."
-                continue
-            }
-
-            # Reutilizamos la lógica de acción de la otra función
-            Invoke-FirewallAudit -Connections $portInfo # Pasamos la info para que el menú funcione
-            break # Salimos después de la acción
-
-        }
-
-    } catch {
-        Write-Error "Ocurrió un error al obtener los puertos en escucha. Detalles: $($_.Exception.Message)"
-    }
-}
-function Invoke-ForensicArtifactCollection {
-    [CmdletBinding(SupportsShouldProcess = $true)]
-    param()
-
-    Write-Host "`n--- Recopilacion de Artefactos Forenses ---" -ForegroundColor Cyan
-    if (-not ($PSCmdlet.ShouldProcess("el sistema para recopilar evidencia", "Recopilar Artefactos"))) {
-        return
-    }
-
-    $evidencePath = Join-Path -Path ([Environment]::GetFolderPath('Desktop')) -ChildPath "MediTool_Evidence_$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss')"
-    Write-Host "Creando carpeta de evidencia en: $evidencePath" -ForegroundColor Yellow
-    New-Item -Path $evidencePath -ItemType Directory -Force | Out-Null
-
-    # 1. Recopilar Prefetch
-    try {
-        Write-Host "Recopilando archivos Prefetch..." -ForegroundColor Green
-        $prefetchPath = Join-Path $evidencePath "Prefetch"
-        New-Item -Path $prefetchPath -ItemType Directory -Force | Out-Null
-        Copy-Item -Path "$($env:windir)\Prefetch\*.pf" -Destination $prefetchPath -ErrorAction SilentlyContinue
-    } catch { Write-Warning "No se pudieron recopilar los archivos Prefetch." }
-
-    # 2. Recopilar LNK y JumpLists
-    try {
-        Write-Host "Recopilando archivos LNK y JumpLists..." -ForegroundColor Green
-        $lnkPath = Join-Path $evidencePath "LNK_Jumplists"
-        New-Item -Path $lnkPath -ItemType Directory -Force | Out-Null
-        $recentPath = "$($env:APPDATA)\Microsoft\Windows\Recent"
-        Copy-Item -Path "$recentPath\*.lnk" -Destination $lnkPath -ErrorAction SilentlyContinue
-        Copy-Item -Path "$recentPath\AutomaticDestinations\*.automaticDestinations-ms" -Destination $lnkPath -ErrorAction SilentlyContinue
-        Copy-Item -Path "$recentPath\CustomDestinations\*.customDestinations-ms" -Destination $lnkPath -ErrorAction SilentlyContinue
-    } catch { Write-Warning "No se pudieron recopilar los archivos LNK/JumpLists." }
-
-    # 3. Extraer Eventos Clave
-    Write-Host "Extrayendo registros de eventos clave (esto puede tardar)..." -ForegroundColor Green
-    $eventsPath = Join-Path $evidencePath "EventLogs"
-    New-Item -Path $eventsPath -ItemType Directory -Force | Out-Null
-
-    # Creacion de Procesos (4688)
-    try {
-        Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4688} -ErrorAction Stop | Select-Object TimeCreated, Id, Message | Export-Csv -Path "$eventsPath\ProcessCreation_4688.csv" -NoTypeInformation -Encoding UTF8
-    } catch { Write-Warning "No se encontraron o no se pudieron exportar los eventos de creacion de procesos." }
-
-    # Creacion de Tareas Programadas (4698)
-    try {
-        Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4698} -ErrorAction Stop | Select-Object TimeCreated, Id, Message | Export-Csv -Path "$eventsPath\ScheduledTaskCreation_4698.csv" -NoTypeInformation -Encoding UTF8
-    } catch { Write-Warning "No se encontraron o no se pudieron exportar los eventos de creacion de tareas." }
-
-    # Borrado de Logs (1102)
-    try {
-        Get-WinEvent -FilterHashtable @{LogName='Security'; ID=1102} -ErrorAction Stop | Select-Object TimeCreated, Id, Message | Export-Csv -Path "$eventsPath\LogClear_1102.csv" -NoTypeInformation -Encoding UTF8
-    } catch { Write-Warning "No se encontraron o no se pudieron exportar los eventos de borrado de logs." }
-
-    # Guardar el log de la sesion actual
-    if ($global:ActionLog.Count -gt 0) {
-        $global:ActionLog | Export-Csv -Path "$evidencePath\ActionLog_Session.csv" -NoTypeInformation -Encoding UTF8
-    }
-
-    Write-Host "`n[OK] Recopilacion de artefactos finalizada." -ForegroundColor Green
-    Write-Host "Los datos se han guardado en la carpeta '$evidencePath'." -ForegroundColor Cyan
-    Invoke-Item -Path $evidencePath
-}
-
-function Invoke-RealTimeMonitoring {
-    Clear-Host
-    Write-Host "`n--- Modulo de Monitoreo en Tiempo Real ---" -ForegroundColor Cyan
-    Write-Host "1. Monitorear Creacion de Procesos"
-    Write-Host "2. Monitorear Conexiones de Red Salientes"
-    Write-Host "0. Volver al menu anterior"
-    $choice = Read-Host "Selecciona una opcion"
-
-    switch ($choice) {
-        '1' {
-            if ($global:ProcessMonitorJob) { Write-Warning "El monitor de procesos ya esta activo."; return }
-            Write-Host "`nIniciando monitor de creacion de procesos en segundo plano..." -ForegroundColor Yellow
-
-            $scriptBlock = {
-                $query = "SELECT * FROM __InstanceCreationEvent WITHIN 5 WHERE TargetInstance ISA 'Win32_Process'"
-                Register-WmiEvent -Query $query -Action {
-                    $process = $event.SourceEventArgs.NewEvent.TargetInstance
-                    $logMessage = "[MONITOR] Nuevo Proceso Creado: $($process.Name) (PID: $($process.ProcessId)) | Linea de Comando: $($process.CommandLine)"
-                    Write-Host $logMessage -ForegroundColor Red
-                } | Out-Null; while ($true) { Start-Sleep -Seconds 1 }
-            }
-            $global:ProcessMonitorJob = Start-Job -ScriptBlock $scriptBlock
-            Add-LogEntry -Message "Iniciado el monitor de creacion de procesos."
-            Write-Host "[OK] Monitor de procesos iniciado. Volviendo al menu..." -ForegroundColor Green
-        }
-        '2' {
-            if ($global:NetworkMonitorJob) { Write-Warning "El monitor de red ya esta activo."; return }
-            Write-Host "`nIniciando monitor de conexiones de red en segundo plano..." -ForegroundColor Yellow
-            $scriptBlock = {
-                $query = "SELECT * FROM __InstanceCreationEvent WITHIN 5 WHERE TargetInstance ISA 'Win32_PerfFormattedData_Tcpip_TCPv4' AND TargetInstance.ConnectionsEstablished > 0"
-                Register-WmiEvent -Query $query -Action {
-                    $connections = $event.SourceEventArgs.NewEvent.TargetInstance.ConnectionsEstablished
-                    $logMessage = "[MONITOR] Nueva conexion de red establecida detectada. Total actual: $connections"
-                    Write-Host $logMessage -ForegroundColor Red
-                    Write-Host "  - Se recomienda ejecutar la 'Auditoria de Conexiones de Red (netstat)' para investigar." -ForegroundColor Cyan
-                } | Out-Null; while ($true) { Start-Sleep -Seconds 1 }
-            }
-            $global:NetworkMonitorJob = Start-Job -ScriptBlock $scriptBlock
-            Add-LogEntry -Message "Iniciado el monitor de conexiones de red."
-            Write-Host "[OK] Monitor de red iniciado. Volviendo al menu..." -ForegroundColor Green
-        }
-        '0' { return }
-        default { Write-Warning "Opcion no valida." }
-    }
-}
-
-function Invoke-ThreatIntelScan {
-    Clear-Host
-    Write-Host "`n--- Modulo de Inteligencia de Amenazas ---" -ForegroundColor Cyan
-    Write-Host "1. Analizar Procesos sin Firma en Lote (VirusTotal)"
-    Write-Host "2. Analizar IPs de Red en Lote (AbuseIPDB)"
-    Write-Host "0. Volver al menu anterior"
-    $choice = Read-Host "Selecciona una opcion"
-
-    switch ($choice) {
-        '1' {
-            $unsigned = Find-UnsignedProcesses
-            if (-not $unsigned) {
-                Write-Host "[OK] No se encontraron procesos sin firma para analizar." -ForegroundColor Green
-                return
-            }
-            Write-Host "Se encontraron $($unsigned.Count) procesos sin firma." -ForegroundColor Yellow
-            $unsigned | Format-Table Name, ID, Path -AutoSize
-            $response = Read-Host "?Deseas analizar todos estos procesos con VirusTotal? (S/N)"
-            if ($response -match '^[sS]$') {
-                foreach ($proc in $unsigned) {
-                    Get-VirusTotalReport -FilePath $proc.Path
-                }
-            }
-        }
-        '2' {
-            $apiKey = Read-Host "Ingresa tu API Key de AbuseIPDB"
-            if ([string]::IsNullOrWhiteSpace($apiKey)) { Write-Warning "API Key no valida."; return }
-
-            $connections = Get-NetTCPConnection | Where-Object { $_.State -eq 'Established' }
-            $remoteIPs = $connections.RemoteAddress | Where-Object { $_ -ne "127.0.0.1" -and $_ -ne "::1" } | Get-Unique
-
-            if (-not $remoteIPs) {
-                Write-Host "[OK] No se encontraron conexiones externas activas para analizar." -ForegroundColor Green
-                return
-            }
-
-            Write-Host "Analizando $($remoteIPs.Count) IPs unicas..." -ForegroundColor Yellow
-            foreach ($ip in $remoteIPs) {
-                $headers = @{ "Key" = $apiKey; "Accept" = "application/json" }
-                $uri = "https://api.abuseipdb.com/api/v2/check?ipAddress=$ip&maxAgeInDays=90"
-                try {
-                    $report = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -ErrorAction Stop
-                    if ($report.data.abuseConfidenceScore -ge 50) {
-                        Write-Host "  - [ALERTA] IP: $ip | Puntuacion de Abuso: $($report.data.abuseConfidenceScore)% | Pais: $($report.data.countryCode)" -ForegroundColor Red
-                    } else {
-                        Write-Host "  - [OK] IP: $ip | Puntuacion de Abuso: $($report.data.abuseConfidenceScore)%" -ForegroundColor Green
-                    }
-                } catch {
-                    Write-Warning "No se pudo analizar la IP $ip. Error: $($_.Exception.Message)"
-                }
-            }
-        }
-        '0' { return }
-        default { Write-Warning "Opcion no valida." }
-    }
-}
-
-function Invoke-VulnerabilityScan {
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
-    param()
-
-    # Base de datos interna de vulnerabilidades con exploits publicos conocidos
-    $knownExploits = @{
-        'MS17-010'      = @{ Type = 'REMOTO'; Exploit = 'EternalBlue/WannaCry'; Criticality = 'CRITICO' }
-        'MS14-068'      = @{ Type = 'LOCAL'; Exploit = 'Kerberos Golden Ticket (PyKEK)'; Criticality = 'CRITICO' }
-        'MS16-032'      = @{ Type = 'LOCAL'; Exploit = 'Secondary Logon Escalation (Juicy Potato)'; Criticality = 'ALTO' }
-        'MS15-051'      = @{ Type = 'LOCAL'; Exploit = 'Win32k Privilege Escalation (CVE-2015-1701)'; Criticality = 'ALTO' }
-        'MS14-064'      = @{ Type = 'REMOTO'; Exploit = 'OLE Remote Code Execution (Sandworm)'; Criticality = 'ALTO' }
-        'MS10-061'      = @{ Type = 'REMOTO'; Exploit = 'Print Spooler RCE'; Criticality = 'MEDIO' }
-        'CVE-2019-0708' = @{ Type = 'REMOTO'; Exploit = 'BlueKeep RDP RCE'; Criticality = 'CRITICO' }
-        'CVE-2020-0796' = @{ Type = 'REMOTO'; Exploit = 'SMBGhost RCE'; Criticality = 'CRITICO' }
-        'CVE-2021-40444' = @{ Type = 'REMOTO'; Exploit = 'MSHTML RCE (Office)'; Criticality = 'ALTO' }
-        'CVE-2023-23397' = @{ Type = 'REMOTO'; Exploit = 'Outlook NTLM Hash Leak'; Criticality = 'CRITICO' }
-    }
-
-    Write-Host "`n--- Buscando Actualizaciones de Seguridad Faltantes y Exploits Conocidos ---" -ForegroundColor Cyan
-    Write-Host "Iniciando contacto con el servicio de Windows Update. Este proceso puede tardar varios minutos..."
-
-    try {
-        $updateSession = New-Object -ComObject "Microsoft.Update.Session"
-        $updateSearcher = $updateSession.CreateUpdateSearcher()
-        
-        Write-Progress -Activity "Buscando Actualizaciones de Windows" -Status "Consultando el servidor de actualizaciones..." -PercentComplete 50
-        
-        $searchResult = $updateSearcher.Search("IsInstalled=0 and Type='Software' and CategoryIDs contains '0fa1201d-4330-4fa8-8ae9-b877473b6441'")
-        
-        Write-Progress -Activity "Buscando Actualizaciones de Windows" -Completed
-
-        if ($searchResult.Updates.Count -eq 0) {
-            Write-Host "`n[OK] No se encontraron actualizaciones de seguridad pendientes. El sistema esta al dia." -ForegroundColor Green
-            return
-        }
-
-        Write-Host "`n[AVISO] Se han encontrado $($searchResult.Updates.Count) actualizaciones de seguridad pendientes." -ForegroundColor Yellow
-        Write-Host "Analizando si alguna corresponde a una vulnerabilidad con exploit conocido..."
-
-        $vulnerableUpdates = foreach ($update in $searchResult.Updates) {
-            $title = $update.Title
-            $kb = ($update.KBArticleIDs | Select-Object -First 1)
-            $severity = $update.MsrcSeverity
-            $exploitInfo = $null
-
-            foreach ($key in $knownExploits.Keys) {
-                if ($title -like "*$key*") {
-                    $exploitInfo = $knownExploits[$key]
-                    break
-                }
-            }
-
-            [PSCustomObject]@{
-                KB          = "KB$kb"
-                Severidad   = if ($severity) { $severity } else { 'No esp.' }
-                Explotable  = if ($exploitInfo) { "SI" } else { "No" }
-                TipoExploit = if ($exploitInfo) { $exploitInfo.Type } else { "N/A" }
-                Nombre      = if ($exploitInfo) { $exploitInfo.Exploit } else { "N/A" }
-                Titulo      = $title
-            }
-        }
-
-        $header = "{0,-12} {1,-10} {2,-11} {3,-12} {4,-40} {5}" -f "KB", "Severidad", "Explotable", "Tipo", "Nombre Exploit", "Titulo de la Actualizacion"
-        Write-Host "`n$header" -ForegroundColor White
-        Write-Host ("-" * ($header.Length + 20)) -ForegroundColor White
-
-        foreach ($item in $vulnerableUpdates) {
-            $isExploitable = $item.Explotable -eq 'SI'
-            $color = if ($isExploitable) { 'Red' } else { 'Yellow' }
-            
-            $line = "{0,-12} {1,-10} {2,-11} {3,-12} {4,-40} {5}" -f $item.KB, $item.Severidad, $item.Explotable, $item.TipoExploit, $item.Nombre, $item.Titulo
-            Write-Host $line -ForegroundColor $color
-        }
-
-        # --- NUEVA SECCION INTERACTIVA PARA INSTALAR ACTUALIZACIONES ---
-        $kbsToInstall = $vulnerableUpdates.KB -replace "KB", "" | Where-Object { $_ }
-        if ($kbsToInstall.Count -gt 0) {
-            $response = Read-Host "`n?Deseas intentar instalar estas $($kbsToInstall.Count) actualizaciones de seguridad para corregir las vulnerabilidades? (S/N)"
-            if ($response -match '^[sS]$') {
-                
-                if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) {
-                    $installModule = Read-Host "El modulo 'PSWindowsUpdate' es necesario. ?Deseas instalarlo desde la PowerShell Gallery? (S/N)"
-                    if ($installModule -match '^[sS]$') {
-                        try {
-                            # Forzar el uso de TLS 1.2 para compatibilidad con PowerShell Gallery
-                            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-
-                            Write-Host "Instalando el modulo PSWindowsUpdate..." -ForegroundColor Cyan
-                            Install-Module PSWindowsUpdate -Force -AcceptLicense -ErrorAction Stop
-                        } catch {
-                            Write-Error "No se pudo instalar el modulo. Abortando la instalacion de actualizaciones."
-                            return
-                        }
-                    } else {
-                        Write-Warning "Instalacion de actualizaciones cancelada."
-                        return
-                    }
-                }
-
-                Write-Host "Iniciando la instalacion de las actualizaciones. Esto puede requerir uno o mas reinicios." -ForegroundColor Yellow
-                if ($PSCmdlet.ShouldProcess("el sistema para instalar $($kbsToInstall.Count) actualizaciones", "Instalar Actualizaciones de Seguridad")) {
-                    Install-WindowsUpdate -KBArticleID $kbsToInstall -AcceptAll -AutoReboot -Verbose
-                }
-            }
-        }
-
-    }
-    catch {
-        Write-Error "Ocurrio un error al contactar con el servicio de Windows Update."
-        Write-Error "Detalles: $($_.Exception.Message)"
-        Write-Warning "Asegurate de que el servicio 'Windows Update' (wuauserv) este en ejecucion."
     }
 }
 function Find-HiddenFilesAndScan {
@@ -1936,193 +1758,102 @@ function Invoke-NotImplemented {
 #endregion
 
 #region Función Principal - Menú Interactivo
-function Show-SubMenu {
-    param(
-        [string]$Title,
-        [array]$MenuOptions
-    )
-    Clear-Host
-    Write-Host "=============================================" -ForegroundColor Green
-    Write-Host "  $Title" -ForegroundColor White
-    Write-Host "=============================================" -ForegroundColor Green
-    $MenuOptions | ForEach-Object {
-        Write-Host "  $($_.ID). $($_.Opcion)"
-    }
-    return Read-Host "`nSelecciona una opcion"
-}
-
-function Start-AuditMenu {
-    $menu = @(
-        [PSCustomObject]@{ ID = 1; Opcion = "Recopilar Artefactos Forenses"; Action = { Invoke-ForensicArtifactCollection } },
-        [PSCustomObject]@{ ID = 2; Opcion = "Iniciar Monitoreo en Tiempo Real"; Action = { Invoke-RealTimeMonitoring } },
-        [PSCustomObject]@{ ID = 3; Opcion = "Analisis con Inteligencia de Amenazas"; Action = { Invoke-ThreatIntelScan } },
-        [PSCustomObject]@{ ID = 4; Opcion = "Revisar Estado de RDP y Ultimas Conexiones"; Action = { Get-RdpStatusAndConnections } },
-        [PSCustomObject]@{ ID = 5; Opcion = "Auditar Conexiones de Red Activas (netstat)"; Action = { Invoke-FirewallAudit } },
-        [PSCustomObject]@{ ID = 6; Opcion = "Analizar Puertos en Escucha (LISTENING)"; Action = { Invoke-PortAnalysis } },
-        [PSCustomObject]@{ ID = 7; Opcion = "Buscar Tareas Programadas Maliciosas"; Action = { Show-Findings -Title "Tareas Programadas Sospechosas" -Data (Find-MaliciousScheduledTasks) -NotFoundMessage "No se encontraron tareas programadas sospechosas." } },
-        [PSCustomObject]@{ ID = 8; Opcion = "Auditar Servicios No Esenciales"; Action = { Audit-NonEssentialServices } },
-        [PSCustomObject]@{ ID = 9; Opcion = "Buscar Cuentas de Usuario Inactivas"; Action = { Show-Findings -Title "Cuentas de Usuario Inactivas" -Data (Find-InactiveUsers) -NotFoundMessage "No se encontraron cuentas de usuario inactivas." } },
-        [PSCustomObject]@{ ID = 10; Opcion = "Verificar Firmas de Archivos Criticos"; Action = { Verify-FileSignatures } },
-        [PSCustomObject]@{ ID = 11; Opcion = "Verificar Procesos en Ejecucion sin Firma"; Action = { Show-Findings -Title "Procesos en Ejecucion sin Firma Digital" -Data (Find-UnsignedProcesses) -NotFoundMessage "No se encontraron procesos sin firma." } },
-        [PSCustomObject]@{ ID = 12; Opcion = "Auditar Registro de Inicio Automatico (Autorun)"; Action = { Find-RegistryAutorun } },
-        [PSCustomObject]@{ ID = 13; Opcion = "Analizar Configuracion de Red Detallada"; Action = { Test-NetworkConnections } },
-        [PSCustomObject]@{ ID = 14; Opcion = "Buscar Archivos de 0 Bytes"; Action = { Find-OrphanedAndZeroByteFiles } },
-        [PSCustomObject]@{ ID = 15; Opcion = "Buscar Archivos Ocultos"; Action = { Find-HiddenFilesAndScan } },
-        [PSCustomObject]@{ ID = 16; Opcion = "Auditar Inicios de Sesion Fallidos"; Action = { Get-FailedLogons | Format-Table -AutoSize } },
-        [PSCustomObject]@{ ID = 17; Opcion = "Buscar Vulnerabilidades (Exploits Conocidos)"; Action = { Invoke-VulnerabilityScan } },
-        [PSCustomObject]@{ ID = 18; Opcion = "Escaneo de Escalada de Privilegios (WinPEAS)"; Action = { Invoke-WinPEAS } },
-        [PSCustomObject]@{ ID = 0; Opcion = "Volver al Menu Principal"; Action = { return } }
-    )
-    while ($true) {
-        $choice = Show-SubMenu -Title "Menu de Auditoria y Analisis Local" -MenuOptions $menu
-        $selected = $menu | Where-Object { $_.ID -eq $choice }
-        if ($selected) {
-            if ($selected.ID -eq 0) { break }
-            Invoke-Command -ScriptBlock $selected.Action
-            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White; Read-Host | Out-Null
-        } else { Write-Host "Opcion no valida." -ForegroundColor Red; Start-Sleep -Seconds 1 }
-    }
-}
-
-function Start-HardeningMenu {
-    $menu = @(
-        [PSCustomObject]@{ ID = 1; Opcion = "Administrar el servicio de RDP"; Action = { Set-RDP } },
-        [PSCustomObject]@{ ID = 2; Opcion = "Administrar la Telemetria de Windows"; Action = { Manage-WindowsTelemetry } },
-        [PSCustomObject]@{ ID = 3; Opcion = "Detener Procesos Sin Firma"; Action = { Stop-SuspiciousProcess } },
-        [PSCustomObject]@{ ID = 4; Opcion = "Bloquear Ejecucion de Archivo por Ruta"; Action = { Block-FileExecution } },
-        [PSCustomObject]@{ ID = 5; Opcion = "Chequeos de Hardening (Anti-PEAS)"; Action = { Invoke-PeasHardeningChecks } },
-        [PSCustomObject]@{ ID = 6; Opcion = "Chequeos de Credenciales (Anti-Mimikatz)"; Action = { Invoke-CredentialHardeningChecks } },
-        [PSCustomObject]@{ ID = 7; Opcion = "Auditar Eventos de Seguridad Criticos"; Action = { Invoke-CriticalEventsAudit } },
-        [PSCustomObject]@{ ID = 8; Opcion = "Verificar Politicas de Seguridad Locales"; Action = { Invoke-LocalPolicyChecks } },
-        [PSCustomObject]@{ ID = 0; Opcion = "Volver al Menu Principal"; Action = { return } }
-    )
-    while ($true) {
-        $choice = Show-SubMenu -Title "Menu de Hardening y Correccion" -MenuOptions $menu
-        $selected = $menu | Where-Object { $_.ID -eq $choice }
-        if ($selected) {
-            if ($selected.ID -eq 0) { break }
-            Invoke-Command -ScriptBlock $selected.Action
-            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White; Read-Host | Out-Null
-        } else { Write-Host "Opcion no valida." -ForegroundColor Red; Start-Sleep -Seconds 1 }
-    }
-}
-
-function Start-DomainReconMenu {
-    Invoke-NotImplemented -FeatureName "Reconocimiento de Dominio"
-    Write-Host "Esta categoria esta disenada para herramientas de Active Directory que han sido eliminadas en esta version." -ForegroundColor Cyan
-}
-
-function Start-AdvancedModulesMenu {
-    $menu = @(
-        [PSCustomObject]@{ ID = 1; Opcion = "Buscar Vulnerabilidades (Exploits Conocidos)"; Action = { Invoke-VulnerabilityScan } },
-        [PSCustomObject]@{ ID = 2; Opcion = "Escaneo de Escalada de Privilegios (WinPEAS)"; Action = { Invoke-WinPEAS } },
-        [PSCustomObject]@{ ID = 88; Opcion = "Activar Windows (Advertencia)"; Action = { Enable-WindowsActivation } },
-        [PSCustomObject]@{ ID = 0; Opcion = "Volver al Menu Principal"; Action = { return } }
-    )
-    while ($true) {
-        $choice = Show-SubMenu -Title "Menu de Modulos Avanzados" -MenuOptions $menu
-        $selected = $menu | Where-Object { $_.ID -eq $choice }
-        if ($selected) {
-            if ($selected.ID -eq 0) { break }
-            Invoke-Command -ScriptBlock $selected.Action
-            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White; Read-Host | Out-Null
-        } else { Write-Host "Opcion no valida." -ForegroundColor Red; Start-Sleep -Seconds 1 }
-    }
-}
-
-function Start-UtilitiesMenu {
-    $menu = @(
-        [PSCustomObject]@{ ID = 1; Opcion = "Generar Reporte de Seguridad (JSON)"; Action = { Export-JsonSecurityReport } },
-        [PSCustomObject]@{ ID = 2; Opcion = "Generar Reporte de Seguridad (HTML)"; Action = { Export-HtmlSecurityReport } },
-        [PSCustomObject]@{ ID = 2; Opcion = "Obtener Informacion del Usuario y Sistema"; Action = { Get-UserInfo | Format-List } },
-        [PSCustomObject]@{ ID = 88; Opcion = "Activar Windows (Advertencia)"; Action = { Enable-WindowsActivation } },
-        [PSCustomObject]@{ ID = 3; Opcion = "Actualizar todas las aplicaciones (winget)"; Action = { Update-AllWingetApps } },
-        [PSCustomObject]@{ ID = 4; Opcion = "Verificacion de Estado (ISO 27001)"; Action = { Test-ISO27001Status } },
-        [PSCustomObject]@{ ID = 5; Opcion = "Limpiar Archivos Temporales del Sistema"; Action = { Remove-SysJunk } },
-        [PSCustomObject]@{ ID = 99; Opcion = "Mensaje del Creador"; Action = { Write-Host "`nCopyright (c) 2023 h00kGh0st" -ForegroundColor Cyan } },
-        [PSCustomObject]@{ ID = 0; Opcion = "Volver al Menu Principal"; Action = { return } }
-    )
-    while ($true) {
-        $choice = Show-SubMenu -Title "Menu de Utilidades y Reportes" -MenuOptions $menu
-        $selected = $menu | Where-Object { $_.ID -eq $choice }
-        if ($selected) {
-            if ($selected.ID -eq 0) { break }
-            Invoke-Command -ScriptBlock $selected.Action
-            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White; Read-Host | Out-Null
-        } else { Write-Host "Opcion no valida." -ForegroundColor Red; Start-Sleep -Seconds 1 }
-    }
-}
-function Stop-AllMonitoringJobs {
-    Write-Host "`nDeteniendo todos los trabajos de monitoreo en segundo plano..." -ForegroundColor Yellow
-    if ($global:ProcessMonitorJob) {
-        Stop-Job -Job $global:ProcessMonitorJob
-        Remove-Job -Job $global:ProcessMonitorJob
-        $global:ProcessMonitorJob = $null
-        Add-LogEntry -Message "Monitor de procesos detenido."
-        Write-Host "[OK] Monitor de procesos detenido." -ForegroundColor Green
-    }
-    if ($global:NetworkMonitorJob) {
-        Stop-Job -Job $global:NetworkMonitorJob
-        Remove-Job -Job $global:NetworkMonitorJob
-        $global:NetworkMonitorJob = $null
-        Add-LogEntry -Message "Monitor de red detenido."
-        Write-Host "[OK] Monitor de red detenido." -ForegroundColor Green
-    }
-}
 function Start-MediTool {
     while ($true) {
         Clear-Host
-
-        # Recibir y mostrar datos de los trabajos en segundo plano
-        if ($global:ProcessMonitorJob) { Receive-Job -Job $global:ProcessMonitorJob }
-        if ($global:NetworkMonitorJob) { Receive-Job -Job $global:NetworkMonitorJob }
+        Set-WindowFocus
 
         Write-Host "=============================================" -ForegroundColor Green
-        Write-Host "=  3.2   Herramienta de Seguridad MediTool  =" -ForegroundColor Green
+        Write-Host "=  1.5   Herramienta de Seguridad MediTool  =" -ForegroundColor Green
         Write-Host "=============================================" -ForegroundColor Green
-
-        # Mostrar estado de los monitores
-        $procStatus = if ($global:ProcessMonitorJob -and $global:ProcessMonitorJob.State -eq 'Running') { "[ACTIVO]" } else { "[INACTIVO]" }
-        $netStatus = if ($global:NetworkMonitorJob -and $global:NetworkMonitorJob.State -eq 'Running') { "[ACTIVO]" } else { "[INACTIVO]" }
-        Write-Host "Estado Monitores: Procesos $procStatus | Red $netStatus" -ForegroundColor Cyan
-        Write-Host "Escribe 'stop' para detener todos los monitores." -ForegroundColor Gray
-
         Write-Host "Bienvenido a MediTool, tu solucion de seguridad Blue Team."
-        Write-Host "Por favor, selecciona una categoria del menu:`n"
+        Write-Host "Por favor, selecciona una opcion del menu:`n"
 
-        $mainMenu = @(
-            [PSCustomObject]@{ ID = 1; Opcion = "Auditoria y Analisis"; Action = { Start-AuditMenu } },
-            [PSCustomObject]@{ ID = 2; Opcion = "Hardening y Correccion"; Action = { Start-HardeningMenu } },
-            [PSCustomObject]@{ ID = 3; Opcion = "Utilidades y Reportes"; Action = { Start-UtilitiesMenu } },
-            [PSCustomObject]@{ ID = 0; Opcion = "Salir"; Action = { Clear-TempFolder; Write-Host "`nSaliendo del programa. ¡Adios!" -ForegroundColor Green; exit } }
+        $menuOptions = @(
+            [PSCustomObject]@{ ID = 1; Opcion = "Revisar Estado de RDP y Ultimas Conexiones" },
+            [PSCustomObject]@{ ID = 2; Opcion = "Auditar Reglas de Firewall Inseguras" },
+            [PSCustomObject]@{ ID = 3; Opcion = "Cerrar Puertos Inseguros (RDP/WinRM)" },
+            [PSCustomObject]@{ ID = 4; Opcion = "Administrar el servicio de RDP" },
+            [PSCustomObject]@{ ID = 5; Opcion = "Administrar la Telemetria de Windows" },
+            [PSCustomObject]@{ ID = 6; Opcion = "Buscar Tareas Programadas Maliciosas" },
+            [PSCustomObject]@{ ID = 7; Opcion = "Auditar Servicios No Esenciales" },
+            [PSCustomObject]@{ ID = 8; Opcion = "Buscar Cuentas de Usuario Inactivas" },
+            [PSCustomObject]@{ ID = 9; Opcion = "Verificar Firmas de Archivos Criticos" },
+            [PSCustomObject]@{ ID = 10; Opcion = "Verificar Procesos en Ejecucion sin Firma" },
+            [PSCustomObject]@{ ID = 11; Opcion = "Detener Procesos Sin Firma" },
+            [PSCustomObject]@{ ID = 12; Opcion = "Bloquear Ejecucion de Archivo" },
+            [PSCustomObject]@{ ID = 13; Opcion = "Auditar Registro de Inicio Automatico (Autorun)" },
+            [PSCustomObject]@{ ID = 14; Opcion = "Analizar Conexiones de Red" },
+            [PSCustomObject]@{ ID = 15; Opcion = "Buscar Archivos de 0 Bytes" },
+            [PSCustomObject]@{ ID = 16; Opcion = "Buscar Archivos Ocultos" },
+            [PSCustomObject]@{ ID = 17; Opcion = "Auditar Inicios de Sesion Fallidos" },
+            [PSCustomObject]@{ ID = 18; Opcion = "Generar Reporte de Seguridad (JSON)" },
+            [PSCustomObject]@{ ID = 19; Opcion = "Informacion del Usuario y Sistema" },
+            [PSCustomObject]@{ ID = 20; Opcion = "Actualizar todas las aplicaciones (winget)" },
+            [PSCustomObject]@{ ID = 21; Opcion = "Verificacion de Estado (ISO 27001 simplificado)" },
+            [PSCustomObject]@{ ID = 22; Opcion = "Limpiar Archivos Temporales del Sistema" },
+            [PSCustomObject]@{ ID = 23; Opcion = "Chequeos de Hardening (PEAS)" },
+            [PSCustomObject]@{ ID = 24; Opcion = "Chequeos de Credenciales (Mimikatz)" },
+            [PSCustomObject]@{ ID = 25; Opcion = "Auditar Eventos de Seguridad Criticos" },
+            [PSCustomObject]@{ ID = 26; Opcion = "Verificar Politicas de Seguridad Locales" },
+            [PSCustomObject]@{ ID = 88; Opcion = "Activar Windows (Advertencia de Seguridad)" },
+            [PSCustomObject]@{ ID = 99; Opcion = "Mensaje del Creador (h00kGh0st)" },
+            [PSCustomObject]@{ ID = 0; Opcion = "Salir" }
         )
 
-        $mainMenu | ForEach-Object { Write-Host "  $($_.ID). $($_.Opcion)" }
-        
-        # Leer la tecla presionada sin esperar a Enter
-        $selection = Read-Host "`nIngresa el numero de la categoria"
+        $menuOptions | Format-Table -Property @{ Expression = "ID"; Width = 4 }, Opcion -HideTableHeaders
+        $selection = Read-Host "Ingresa el numero de la opcion que deseas ejecutar"
 
-        # Comprobar si se quiere detener los monitores
-        if ($selection -eq 'stop') {
-            Stop-AllMonitoringJobs
-            Read-Host "`nPresione Enter para continuar..." | Out-Null
-            continue
+        switch ($selection) {
+            '1' { Get-RdpStatusAndConnections }
+            '2' { Get-FirewallStatus }
+            '3' { Repair-FirewallPorts }
+            '4' { Set-RDP }
+            '5' { Manage-WindowsTelemetry }
+            '6' { Show-Findings -Title "Tareas Programadas Sospechosas" -Data (Find-MaliciousScheduledTasks) -NotFoundMessage "No se encontraron tareas programadas sospechosas." }
+            '7' { Audit-NonEssentialServices }
+            '8' { Show-Findings -Title "Cuentas de Usuario Inactivas" -Data (Find-InactiveUsers) -NotFoundMessage "No se encontraron cuentas de usuario inactivas." }
+            '9' { Verify-FileSignatures }
+            '10' { Show-Findings -Title "Procesos en Ejecucion sin Firma Digital" -Data (Find-UnsignedProcesses) -NotFoundMessage "No se encontraron procesos sin firma." }
+            '11' { Stop-SuspiciousProcess }
+            '12' { Block-FileExecution }
+            '13' { Find-RegistryAutorun }
+            '14' { Test-NetworkConnections }
+            '15' { Find-OrphanedAndZeroByteFiles }
+            '16' { Find-HiddenFilesAndScan }
+            '17' { Get-FailedLogons | Format-Table -AutoSize }
+            '18' { Export-JsonSecurityReport }
+            '19' { Get-UserInfo | Format-List }
+            '20' { Update-AllWingetApps }
+            '21' {
+                Write-Host "'nTesteando ISO 27001 Status... (Demora un poquito)" -ForegroundColor Cyan
+                Test-ISO27001Status 
+            }
+            '22' { Remove-SysJunk }
+            '23' { Invoke-PeasHardeningChecks }
+            '24' { Invoke-CredentialHardeningChecks }
+            '25' { Invoke-CriticalEventsAudit }
+            '26' { Invoke-LocalPolicyChecks  }
+            '88' { Enable-WindowsActivation }
+            '99' { Write-Host "`nCopyright (c) 2023 h00kGh0st" -ForegroundColor Cyan }
+            '0' {
+                Clear-TempFolder
+                Write-Host "`nSaliendo del programa. ¡Adios!" -ForegroundColor Green
+                exit
+            }
+            default {
+                Write-Host "`nOpcion no valida. Por favor, intente de nuevo." -ForegroundColor Red
+            }
         }
 
-        $chosenOption = $mainMenu | Where-Object { $_.ID -eq $selection }
-
-        if ($chosenOption) {
-            if ($selection -eq '0') {
-                Stop-AllMonitoringJobs
-            }
-            Invoke-Command -ScriptBlock $chosenOption.Action
-        } else {
-            Write-Host "`nOpcion no valida. Por favor, intente de nuevo." -ForegroundColor Red
-            Start-Sleep -Seconds 2
+        if ($selection -ne '0') {
+            Write-Host "`nPresione Enter para continuar..." -ForegroundColor White
+            Read-Host | Out-Null
         }
     }
 }
 #endregion
+
 # --- Punto de Entrada del Script ---
 # Aquí se inicia la herramienta.
 Start-MediTool
