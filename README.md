@@ -16,7 +16,7 @@ Utilitarios Adicionales: Incluye herramientas para actualizar aplicaciones con w
 
 :card_file_box: Archivo del Código:
 
-meditool.ps1: El script principal de la herramienta.
+meditoolbeta.ps1: El script principal de la herramienta.
 
 :gear: Cómo usarlo :gear:
 
